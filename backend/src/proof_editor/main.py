@@ -56,20 +56,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-VALID_PROVIDERS = {"anthropic", "ddg", "exa"}
-
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """Main WebSocket endpoint for the writing partner workflow.
-
-    Accepts ?provider=anthropic|ddg|exa query param for search experiments.
-    """
+    """Main WebSocket endpoint for the writing partner workflow."""
     await websocket.accept()
-    provider = websocket.query_params.get("provider", "anthropic")
-    if provider not in VALID_PROVIDERS:
-        provider = "anthropic"
-    orchestrator = Orchestrator(websocket, provider=provider)
+    orchestrator = Orchestrator(websocket)
 
     try:
         while True:

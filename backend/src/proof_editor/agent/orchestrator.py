@@ -23,9 +23,8 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
     """Routes WebSocket messages to the appropriate handler based on state."""
 
-    def __init__(self, websocket: WebSocket, provider: str = "anthropic") -> None:
+    def __init__(self, websocket: WebSocket) -> None:
         self.ws = websocket
-        self.provider = provider
         self.state = "idle"  # idle, interview, drafting, highlighting, focused
         self.session_id: int | None = None
         self.task_type: str = ""
@@ -46,7 +45,7 @@ class Orchestrator:
 
     async def handle_task_select(self, msg: TaskSelect) -> None:
         """Handle task selection — create session and start interview."""
-        logger.info("[%s] task.select: %s / %s", self.provider, msg.task_type, msg.topic)
+        logger.info("task.select: %s / %s", msg.task_type, msg.topic)
         from proof_editor.agent.interviewer import Interviewer
         from proof_editor.agent.search import create_search_provider
         from proof_editor.db import get_session
@@ -71,12 +70,11 @@ class Orchestrator:
             self.session_id = session.id
 
         self.state = "interview"
-        search_provider = create_search_provider(self.provider)
+        search_provider = create_search_provider()
         self._interviewer = Interviewer(
             task_type=self.task_type,
             topic=self.topic,
             websocket=self.ws,
-            provider=self.provider,
             search_provider=search_provider,
         )
 
@@ -89,7 +87,7 @@ class Orchestrator:
 
     async def handle_interview_answer(self, msg: InterviewAnswer) -> None:
         """Handle user's answer during interview phase."""
-        logger.info("[%s] interview.answer received", self.provider)
+        logger.info("interview.answer received")
         if self.state != "interview":
             await self.send(ErrorMessage(message="Not in interview state"))
             return

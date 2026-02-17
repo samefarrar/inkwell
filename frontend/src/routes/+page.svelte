@@ -7,9 +7,6 @@
   import TaskSelector from '$lib/components/TaskSelector.svelte';
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
-  import SearchExperiment from '$lib/components/SearchExperiment.svelte';
-
-  let experimentMode = $state(false);
 
   let unsubscribe: (() => void) | undefined;
   let activeBuffers: StreamBuffer[] = [];
@@ -118,49 +115,38 @@
       <span class="connection-dot" class:connected={ws.connected}></span>
     </div>
     <div class="breadcrumb">
-      {#if experimentMode}
-        <span class="crumb current">Search Experiment</span>
-      {:else}
-        {#each steps as step, i}
-          {#if i > 0}
-            <span class="crumb-sep">›</span>
-          {/if}
-          <span
-            class="crumb"
-            class:past={(screenOrder[session.screen] ?? 0) > i}
-            class:current={session.screen === step}
-            class:future={(screenOrder[session.screen] ?? 0) < i}
-          >
-            {stepLabels[step]}
-          </span>
-        {/each}
-      {/if}
+      {#each steps as step, i}
+        {#if i > 0}
+          <span class="crumb-sep">›</span>
+        {/if}
+        <span
+          class="crumb"
+          class:past={(screenOrder[session.screen] ?? 0) > i}
+          class:current={session.screen === step}
+          class:future={(screenOrder[session.screen] ?? 0) < i}
+        >
+          {stepLabels[step]}
+        </span>
+      {/each}
     </div>
-    <button class="experiment-toggle" onclick={() => { experimentMode = !experimentMode; }}>
-      {experimentMode ? 'Normal Mode' : 'Search Experiment'}
-    </button>
   </nav>
 
   <main>
-    {#if experimentMode}
-      <SearchExperiment />
-    {:else}
-      {#key session.screen}
-        <div class="screen">
-          {#if session.screen === 'task'}
-            <TaskSelector />
-          {:else if session.screen === 'interview'}
-            <Interview />
-          {:else if session.screen === 'drafts'}
-            <DraftComparison />
-          {:else if session.screen === 'focus'}
-            <div class="placeholder">
-              <p>Focus editing mode coming soon.</p>
-            </div>
-          {/if}
-        </div>
-      {/key}
-    {/if}
+    {#key session.screen}
+      <div class="screen">
+        {#if session.screen === 'task'}
+          <TaskSelector />
+        {:else if session.screen === 'interview'}
+          <Interview />
+        {:else if session.screen === 'drafts'}
+          <DraftComparison />
+        {:else if session.screen === 'focus'}
+          <div class="placeholder">
+            <p>Focus editing mode coming soon.</p>
+          </div>
+        {/if}
+      </div>
+    {/key}
   </main>
 </div>
 
@@ -286,25 +272,6 @@
 
   .crumb.future {
     color: var(--chrome-border);
-  }
-
-  /* Experiment toggle */
-  .experiment-toggle {
-    padding: 4px 12px;
-    background: var(--chrome-surface);
-    border: 1px solid var(--chrome-border);
-    border-radius: 6px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--chrome-text-muted);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .experiment-toggle:hover {
-    border-color: var(--accent);
-    color: var(--accent);
   }
 
   /* Main */

@@ -79,19 +79,14 @@ class ExaSearchProvider:
             return []
 
 
-def create_search_provider(
-    provider_name: str,
-) -> SearchProvider | None:
-    """Factory: create a search provider by name.
+def create_search_provider() -> SearchProvider:
+    """Create the default search provider.
 
-    Returns None for 'anthropic' (handled at LiteLLM level).
+    Uses Exa if EXA_API_KEY is set, otherwise falls back to DDG (free).
     """
-    if provider_name == "ddg":
-        return DDGSearchProvider()
-    elif provider_name == "exa":
-        return ExaSearchProvider()
-    elif provider_name == "anthropic":
-        return None
-    else:
-        logger.warning("Unknown search provider: %s", provider_name)
-        return None
+    exa_key = os.environ.get("EXA_API_KEY", "")
+    if exa_key:
+        logger.info("Using Exa search provider")
+        return ExaSearchProvider(api_key=exa_key)
+    logger.info("Using DDG search provider (no EXA_API_KEY)")
+    return DDGSearchProvider()

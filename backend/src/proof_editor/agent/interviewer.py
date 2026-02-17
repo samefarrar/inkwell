@@ -37,7 +37,11 @@ RULES:
 3. Before each question, assess what you know vs what's missing.
 4. After each answer, evaluate whether you have enough material.
 5. Typically 2-4 questions are sufficient. Don't over-interview.
-{search_instructions}
+6. You have access to web search via the `search_web` tool. Use it \
+to research background context about the topic — awards, reviews, \
+company info, technical details, etc. Search BEFORE asking your \
+next question when background knowledge would help.
+
 You MUST use the provided tools for ALL responses.
 
 For each turn, call tools in this order:
@@ -49,17 +53,6 @@ For each turn, call tools in this order:
 context that would help you ask better questions or verify details.
 
 {examples_context}"""
-
-_SEARCH_INSTRUCTIONS_TOOL = """
-6. You have access to web search via the `search_web` tool. Use it \
-to research background context about the topic — awards, reviews, \
-company info, technical details, etc. Search BEFORE asking your \
-next question when background knowledge would help."""
-
-_SEARCH_INSTRUCTIONS_BUILTIN = """
-6. You have built-in web search capabilities. The system will \
-automatically search the web when relevant to supplement your \
-knowledge. Use this to verify facts and gather background context."""
 
 _SHOW_THOUGHT_DESC = (
     "Show your reasoning about what material you have "
@@ -177,36 +170,25 @@ class Interviewer:
         task_type: str,
         topic: str,
         websocket: WebSocket,
-        provider: str = "anthropic",
         search_provider: SearchProvider | None = None,
     ) -> None:
         self.task_type = task_type
         self.topic = topic
         self.ws = websocket
-        self.provider = provider
         self.search_provider = search_provider
         self.messages: list[dict[str, Any]] = []
 
         examples = load_examples()
         examples_context = format_examples_for_prompt(examples)
 
-        # Pick search instructions based on provider
-        if provider == "anthropic":
-            search_instructions = _SEARCH_INSTRUCTIONS_BUILTIN
-        else:
-            search_instructions = _SEARCH_INSTRUCTIONS_TOOL
-
         self.system_prompt = SYSTEM_PROMPT.format(
             task_type=task_type,
             topic=topic,
             examples_context=examples_context,
-            search_instructions=search_instructions,
         )
 
-        # Build tool list: base tools + search_web for DDG/Exa
-        self.tools: list[dict[str, Any]] = list(BASE_TOOLS)
-        if provider in ("ddg", "exa"):
-            self.tools.append(SEARCH_WEB_TOOL)
+        # Always include search_web tool
+        self.tools: list[dict[str, Any]] = [*BASE_TOOLS, SEARCH_WEB_TOOL]
 
     async def start(self) -> None:
         """Begin the interview — send the first question."""
@@ -226,28 +208,19 @@ class Interviewer:
 
     async def _call_llm(self) -> dict[str, Any]:
         """Call LiteLLM and process tool calls."""
-        logger.info(
-            "[%s] Calling LLM (%d messages)", self.provider, len(self.messages)
-        )
+        logger.info("Calling LLM (%d messages)", len(self.messages))
         try:
             from litellm import acompletion
 
-            kwargs: dict[str, Any] = {
-                "model": "anthropic/claude-sonnet-4-6",
-                "messages": self.messages,
-                "tools": self.tools,
-                "tool_choice": "auto",
-            }
-            # Anthropic built-in search: pass web_search_options
-            if self.provider == "anthropic":
-                kwargs["web_search_options"] = {
-                    "search_context_size": "medium",
-                }
-
-            response = await acompletion(**kwargs)
-            logger.info("[%s] LLM responded", self.provider)
+            response = await acompletion(
+                model="anthropic/claude-sonnet-4-6",
+                messages=self.messages,
+                tools=self.tools,
+                tool_choice="auto",
+            )
+            logger.info("LLM responded")
         except Exception as e:
-            logger.error("[%s] LLM call failed: %s", self.provider, e)
+            logger.error("LLM call failed: %s", e)
             await self.ws.send_text(
                 StatusMessage(
                     message=f"LLM error: {e}. Set ANTHROPIC_API_KEY."

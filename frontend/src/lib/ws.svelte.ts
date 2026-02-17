@@ -40,11 +40,6 @@ export class WebSocketClient {
   private reconnectDelay = 1000;
   private shouldReconnect = true;
   private _connected = $state(false);
-  private url: string;
-
-  constructor(provider?: string) {
-    this.url = provider ? `${BASE_WS_URL}?provider=${provider}` : BASE_WS_URL;
-  }
 
   get connected(): boolean {
     return this._connected;
@@ -53,12 +48,12 @@ export class WebSocketClient {
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    this.ws = new WebSocket(this.url);
+    this.ws = new WebSocket(BASE_WS_URL);
 
     this.ws.onopen = () => {
       this._connected = true;
       this.reconnectDelay = 1000;
-      console.log(`[WS] Connected to ${this.url}`);
+      console.log('[WS] Connected');
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
