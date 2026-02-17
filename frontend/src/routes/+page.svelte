@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { ws, type ServerMessage } from '$lib/ws';
+  import { ws, type ServerMessage } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
   import TaskSelector from '$lib/components/TaskSelector.svelte';

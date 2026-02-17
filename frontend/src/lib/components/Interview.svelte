@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ws } from '$lib/ws';
+  import { ws } from '$lib/ws.svelte';
   import { session, type ChatMessage } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
   import { tick } from 'svelte';

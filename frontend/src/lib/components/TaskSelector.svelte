@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ws } from '$lib/ws';
+  import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
 
   const taskTypes = [
