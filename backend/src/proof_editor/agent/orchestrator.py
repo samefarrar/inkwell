@@ -46,6 +46,7 @@ class Orchestrator:
 
     async def handle_task_select(self, msg: TaskSelect) -> None:
         """Handle task selection — create session and start interview."""
+        logger.info("[%s] task.select: %s / %s", self.provider, msg.task_type, msg.topic)
         from proof_editor.agent.interviewer import Interviewer
         from proof_editor.agent.search import create_search_provider
         from proof_editor.db import get_session
@@ -88,6 +89,7 @@ class Orchestrator:
 
     async def handle_interview_answer(self, msg: InterviewAnswer) -> None:
         """Handle user's answer during interview phase."""
+        logger.info("[%s] interview.answer received", self.provider)
         if self.state != "interview":
             await self.send(ErrorMessage(message="Not in interview state"))
             return

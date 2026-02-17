@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup and shutdown events."""
+    logging.basicConfig(level=logging.INFO, force=True)
     create_tables()
     logger.info("Database tables created")
     yield

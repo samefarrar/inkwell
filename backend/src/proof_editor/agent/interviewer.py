@@ -226,6 +226,9 @@ class Interviewer:
 
     async def _call_llm(self) -> dict[str, Any]:
         """Call LiteLLM and process tool calls."""
+        logger.info(
+            "[%s] Calling LLM (%d messages)", self.provider, len(self.messages)
+        )
         try:
             from litellm import acompletion
 
@@ -242,8 +245,9 @@ class Interviewer:
                 }
 
             response = await acompletion(**kwargs)
+            logger.info("[%s] LLM responded", self.provider)
         except Exception as e:
-            logger.error("LLM call failed: %s", e)
+            logger.error("[%s] LLM call failed: %s", self.provider, e)
             await self.ws.send_text(
                 StatusMessage(
                     message=f"LLM error: {e}. Set ANTHROPIC_API_KEY."
