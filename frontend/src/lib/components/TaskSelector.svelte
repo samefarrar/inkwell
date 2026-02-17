@@ -18,128 +18,182 @@
     session.startInterview(selectedType, topic.trim());
     ws.send({ type: 'task.select', task_type: selectedType, topic: topic.trim() });
   }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && topic.trim()) {
-      startInterview();
-    }
-  }
 </script>
 
 <div class="task-selector">
-  <div class="hero">
-    <h1>What are we writing?</h1>
-    <p class="subtitle">I'll interview you to extract the good stuff, then draft three angles for you to choose from.</p>
+  <div class="anim" style="animation-delay: 0ms">
+    <h1 class="headline">What are we writing?</h1>
   </div>
 
-  <div class="form">
-    <div class="field">
-      <label for="task-type">Type</label>
-      <select id="task-type" bind:value={selectedType}>
-        {#each taskTypes as t}
-          <option value={t.value}>{t.label}</option>
-        {/each}
-      </select>
-    </div>
+  <p class="subtitle anim" style="animation-delay: 80ms">
+    I'll interview you to extract the good stuff, then draft three angles.
+  </p>
 
-    <div class="field">
-      <label for="topic">Topic</label>
-      <input
-        id="topic"
-        type="text"
-        bind:value={topic}
-        onkeydown={handleKeydown}
-        placeholder="e.g., Restaurant review of Burnt Orange Brighton"
-      />
-    </div>
-
-    <button class="start-btn" onclick={startInterview} disabled={!topic.trim()}>
-      Start Interview
-    </button>
+  <div class="pills anim" style="animation-delay: 160ms">
+    {#each taskTypes as t}
+      <button
+        class="pill"
+        class:selected={selectedType === t.value}
+        onclick={() => (selectedType = t.value)}
+      >
+        {t.label}
+      </button>
+    {/each}
   </div>
+
+  <div class="anim" style="animation-delay: 240ms">
+    <textarea
+      bind:value={topic}
+      placeholder="What's the topic? e.g., Restaurant review of Burnt Orange Brighton"
+      rows="3"
+    ></textarea>
+  </div>
+
+  <button
+    class="start-btn anim"
+    style="animation-delay: 320ms"
+    onclick={startInterview}
+    disabled={!topic.trim()}
+  >
+    Start Interview
+  </button>
 </div>
 
 <style>
   .task-selector {
-    max-width: 560px;
-    margin: 0 auto;
-    padding: 80px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 48px);
+    padding: 40px 24px;
+    background: radial-gradient(ellipse at center, rgba(232, 115, 58, 0.04) 0%, transparent 70%);
   }
 
-  .hero {
-    margin-bottom: 48px;
+  .anim {
+    animation: slideUp 0.4s ease-out both;
   }
 
-  h1 {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text-primary, #1a1a1a);
-    margin: 0 0 12px;
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .headline {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 40px;
+    font-weight: 400;
+    color: var(--chrome-text);
+    margin: 0;
+    text-align: center;
   }
 
   .subtitle {
+    font-family: 'Outfit', sans-serif;
     font-size: 16px;
-    color: var(--text-secondary, #666);
+    color: var(--chrome-text-muted);
+    margin: 8px 0 36px;
+    text-align: center;
+  }
+
+  /* Pill buttons */
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .pill {
+    padding: 8px 20px;
+    border-radius: 24px;
+    border: 1px solid var(--chrome-border);
+    background: transparent;
+    color: var(--chrome-text-muted);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s;
+  }
+
+  .pill:hover {
+    border-color: var(--chrome-text-muted);
+    color: var(--chrome-text);
+  }
+
+  .pill.selected {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  /* Topic textarea */
+  textarea {
+    width: 100%;
+    max-width: 480px;
+    min-height: 80px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border: 1px solid var(--paper-border);
+    border-radius: 12px;
+    font-family: 'Newsreader', serif;
+    font-size: 16px;
     line-height: 1.5;
-    margin: 0;
+    color: var(--ink);
+    resize: vertical;
+    margin-bottom: 20px;
   }
 
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+  textarea::placeholder {
+    color: var(--ink-muted);
   }
 
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary, #666);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  select,
-  input {
-    padding: 12px 16px;
-    border: 1px solid var(--border, #e0e0e0);
-    border-radius: 8px;
-    font-size: 16px;
-    color: var(--text-primary, #1a1a1a);
-    background: var(--bg-surface, #fff);
-    transition: border-color 0.15s;
-  }
-
-  select:focus,
-  input:focus {
+  textarea:focus {
     outline: none;
-    border-color: var(--accent, #f97316);
+    border-color: var(--accent);
   }
 
+  /* Start button */
   .start-btn {
-    padding: 14px 24px;
-    background: var(--accent, #f97316);
+    width: 100%;
+    max-width: 480px;
+    padding: 16px;
+    background: var(--accent);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
+    font-family: 'Outfit', sans-serif;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s;
-    margin-top: 8px;
+    transition: opacity 0.2s, box-shadow 0.2s;
   }
 
   .start-btn:hover:not(:disabled) {
     opacity: 0.9;
   }
 
+  .start-btn:not(:disabled) {
+    animation: slideUp 0.4s ease-out both, glowPulse 2s ease-in-out infinite 0.4s;
+  }
+
   .start-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  @keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(232, 115, 58, 0); }
+    50% { box-shadow: 0 0 20px var(--accent-glow); }
   }
 </style>

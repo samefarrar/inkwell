@@ -18,55 +18,76 @@
 
   {#if drafts.allComplete}
     <div class="actions">
-      <p class="hint">Click "Focus on this" on any draft to start editing, or highlight across drafts (coming soon).</p>
+      <p class="hint">Click "Focus on this" on any draft to start editing, or highlight across drafts.</p>
     </div>
   {/if}
 </div>
 
 <style>
   .draft-comparison {
-    padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px);
+    padding: 24px 32px;
+    background: var(--chrome);
   }
 
   .header {
+    text-align: center;
     margin-bottom: 24px;
+    flex-shrink: 0;
   }
 
   h2 {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary, #1a1a1a);
-    margin: 0 0 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--chrome-text);
+    margin: 0 0 6px;
   }
 
   .subtitle {
-    font-size: 15px;
-    color: var(--text-secondary, #666);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    color: var(--chrome-text-muted);
     margin: 0;
   }
 
   .panels {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    grid-template-rows: 1fr;
+    gap: 20px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panels > :global(.draft-panel) {
+    min-height: 0;
   }
 
   @media (max-width: 900px) {
     .panels {
       grid-template-columns: 1fr;
+      grid-template-rows: auto;
+    }
+
+    .draft-comparison {
+      height: auto;
+      min-height: calc(100vh - 48px);
     }
   }
 
   .actions {
-    margin-top: 24px;
+    margin-top: 20px;
     text-align: center;
+    flex-shrink: 0;
   }
 
   .hint {
-    font-size: 14px;
-    color: var(--text-muted, #999);
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
     margin: 0;
   }
 </style>

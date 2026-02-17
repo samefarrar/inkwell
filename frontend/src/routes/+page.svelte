@@ -73,6 +73,14 @@
     unsubscribe?.();
     ws.disconnect();
   });
+
+  const steps = ['task', 'interview', 'drafts'] as const;
+  const stepLabels: Record<string, string> = {
+    task: 'Task',
+    interview: 'Interview',
+    drafts: 'Drafts'
+  };
+  const screenOrder: Record<string, number> = { task: 0, interview: 1, drafts: 2, focus: 3 };
 </script>
 
 <svelte:head>
@@ -81,48 +89,87 @@
 
 <div class="app">
   <nav class="topbar">
-    <span class="logo">Proof</span>
-    <span class="connection" class:connected={ws.connected}>
-      {ws.connected ? 'Connected' : 'Disconnected'}
-    </span>
+    <div class="nav-left">
+      <span class="logo">Proof</span>
+      <span class="connection-dot" class:connected={ws.connected}></span>
+    </div>
+    <div class="breadcrumb">
+      {#each steps as step, i}
+        {#if i > 0}
+          <span class="crumb-sep">›</span>
+        {/if}
+        <span
+          class="crumb"
+          class:past={(screenOrder[session.screen] ?? 0) > i}
+          class:current={session.screen === step}
+          class:future={(screenOrder[session.screen] ?? 0) < i}
+        >
+          {stepLabels[step]}
+        </span>
+      {/each}
+    </div>
   </nav>
 
   <main>
-    {#if session.screen === 'task'}
-      <TaskSelector />
-    {:else if session.screen === 'interview'}
-      <Interview />
-    {:else if session.screen === 'drafts'}
-      <DraftComparison />
-    {:else if session.screen === 'focus'}
-      <div class="placeholder">
-        <p>Focus editing mode coming in Phase 5.</p>
+    {#key session.screen}
+      <div class="screen">
+        {#if session.screen === 'task'}
+          <TaskSelector />
+        {:else if session.screen === 'interview'}
+          <Interview />
+        {:else if session.screen === 'drafts'}
+          <DraftComparison />
+        {:else if session.screen === 'focus'}
+          <div class="placeholder">
+            <p>Focus editing mode coming soon.</p>
+          </div>
+        {/if}
       </div>
-    {/if}
+    {/key}
   </main>
 </div>
 
 <style>
-  :global(body) {
-    margin: 0;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-      'Helvetica Neue', Arial, sans-serif;
-    background: var(--bg, #fafafa);
-    color: var(--text-primary, #1a1a1a);
-    -webkit-font-smoothing: antialiased;
+  :global(:root) {
+    /* Chrome (dark workspace) */
+    --chrome: #1a1a1e;
+    --chrome-surface: #26262b;
+    --chrome-border: #38383d;
+    --chrome-text: #e4e4e7;
+    --chrome-text-muted: #71717a;
+
+    /* Paper (warm reading surfaces) */
+    --paper: #faf8f5;
+    --paper-surface: #f3f0eb;
+    --paper-border: #e2ddd5;
+
+    /* Ink (text on paper) */
+    --ink: #2c2418;
+    --ink-secondary: #7a7062;
+    --ink-muted: #a8a090;
+
+    /* Accent */
+    --accent: #e8733a;
+    --accent-glow: rgba(232, 115, 58, 0.15);
+    --accent-soft: #f4a574;
+
+    /* Semantic */
+    --success: #4ade80;
+    --thought-bg: #2d2822;
+    --thought-border: #4a3f2f;
   }
 
-  :global(:root) {
-    --bg: #fafafa;
-    --bg-surface: #ffffff;
-    --bg-muted: #f3f4f6;
-    --text-primary: #1a1a1a;
-    --text-secondary: #666666;
-    --text-muted: #999999;
-    --border: #e0e0e0;
-    --accent: #f97316;
-    --accent-light: #fff7ed;
+  :global(body) {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    background: var(--chrome);
+    color: var(--chrome-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :global(*, *::before, *::after) {
+    box-sizing: border-box;
   }
 
   .app {
@@ -131,36 +178,104 @@
     flex-direction: column;
   }
 
+  /* Nav bar */
   .topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-surface);
+    padding: 0 24px;
+    border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome);
+    height: 48px;
+    flex-shrink: 0;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .logo {
+    font-family: 'Outfit', sans-serif;
     font-size: 18px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--chrome-text);
+    letter-spacing: 0.02em;
   }
 
-  .connection {
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 12px;
-    background: #fef2f2;
-    color: #dc2626;
+  .connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #dc2626;
+    animation: breathe 2s ease-in-out infinite;
   }
 
-  .connection.connected {
-    background: #f0fdf4;
-    color: #16a34a;
+  .connection-dot.connected {
+    background: var(--success);
   }
 
+  @keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Breadcrumb */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .crumb-sep {
+    color: var(--chrome-text-muted);
+    font-size: 11px;
+  }
+
+  .crumb {
+    color: var(--chrome-border);
+    transition: color 0.2s;
+  }
+
+  .crumb.past {
+    color: var(--chrome-text-muted);
+  }
+
+  .crumb.current {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .crumb.future {
+    color: var(--chrome-border);
+  }
+
+  /* Main */
   main {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .placeholder {
@@ -168,6 +283,7 @@
     align-items: center;
     justify-content: center;
     height: 50vh;
-    color: var(--text-muted);
+    color: var(--chrome-text-muted);
+    font-family: 'Outfit', sans-serif;
   }
 </style>

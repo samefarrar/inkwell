@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ws } from '$lib/ws.svelte';
-  import { session, type ChatMessage } from '$lib/stores/session.svelte';
+  import { session } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
   import { tick } from 'svelte';
 
@@ -8,7 +8,6 @@
   let messagesEnd: HTMLDivElement;
 
   $effect(() => {
-    // Scroll to bottom when messages change
     if (session.messages.length) {
       tick().then(() => {
         messagesEnd?.scrollIntoView({ behavior: 'smooth' });
@@ -37,74 +36,68 @@
     drafts.reset();
   }
 
-  function renderMessage(msg: ChatMessage): { class: string; label: string } {
-    switch (msg.role) {
-      case 'user':
-        return { class: 'user', label: 'You' };
-      case 'ai':
-        return { class: 'ai', label: 'Writing Partner' };
-      case 'thought':
-        return { class: 'thought', label: 'Thinking...' };
-      case 'status':
-        return { class: 'status', label: '' };
-      default:
-        return { class: 'ai', label: 'Writing Partner' };
-    }
+  function questionCount(): number {
+    return session.messages.filter((m) => m.role === 'ai').length;
   }
 </script>
 
 <div class="interview">
-  <div class="header">
-    <h2>Interview: {session.topic}</h2>
-    <span class="badge">{session.taskType}</span>
+  <!-- Progress dots -->
+  <div class="progress">
+    {#each Array(5) as _, i}
+      <span class="dot" class:filled={i < questionCount()}></span>
+    {/each}
   </div>
 
   <div class="messages">
-    {#each session.messages as msg}
-      {@const meta = renderMessage(msg)}
-      <div class="message {meta.class}">
-        {#if msg.role === 'thought' && msg.thought}
-          <details class="thought-block" open>
-            <summary>Thinking...</summary>
+    {#each session.messages as msg, idx}
+      {#if msg.role === 'thought' && msg.thought}
+        {@const isFirst = !session.messages.slice(0, idx).some((m) => m.role === 'thought')}
+        <div class="thought-block">
+          <details open={isFirst}>
+            <summary class="thought-label">Thinking</summary>
             <p class="assessment">{msg.thought.assessment}</p>
             {#if msg.thought.missing.length > 0}
               <div class="missing">
-                <span class="missing-label">Still need:</span>
-                <ul>
-                  {#each msg.thought.missing as item}
-                    <li>{item}</li>
-                  {/each}
-                </ul>
+                <span class="missing-label">Still exploring: </span>
+                <span class="missing-items">{msg.thought.missing.join(', ')}</span>
               </div>
             {/if}
             {#if msg.thought.sufficient}
               <span class="sufficient-badge">Ready to draft</span>
             {/if}
           </details>
-        {:else if msg.role === 'status'}
-          <div class="status-text">{msg.content}</div>
-        {:else}
-          {#if meta.label}
-            <span class="msg-label">{meta.label}</span>
-          {/if}
-          <p class="msg-content">{msg.content}</p>
-        {/if}
-      </div>
+        </div>
+      {:else if msg.role === 'status'}
+        <div class="status-msg">{msg.content}</div>
+      {:else if msg.role === 'ai'}
+        <div class="ai-msg">
+          <span class="msg-label">WRITING PARTNER</span>
+          <p class="msg-text">{msg.content}</p>
+        </div>
+      {:else if msg.role === 'user'}
+        <div class="user-msg">
+          <span class="msg-label user-label">YOU</span>
+          <div class="user-block">
+            <p class="msg-text">{msg.content}</p>
+          </div>
+        </div>
+      {/if}
     {/each}
     <div bind:this={messagesEnd}></div>
   </div>
 
   {#if session.readyToDraft}
     <div class="ready-bar">
-      <p>I have enough material to write three drafts.</p>
+      <span class="ready-text">I have enough material to write three drafts.</span>
       <button class="draft-btn" onclick={startDrafting}>Start Writing</button>
     </div>
   {:else}
-    <div class="input-bar">
+    <div class="input-area">
       <textarea
         bind:value={input}
         onkeydown={handleKeydown}
-        placeholder="Type your answer..."
+        placeholder="Share your thoughts..."
         rows="5"
       ></textarea>
       <button class="send-btn" onclick={sendAnswer} disabled={!input.trim()}>
@@ -118,192 +111,213 @@
   .interview {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    max-width: 720px;
+    height: calc(100vh - 48px);
+    max-width: 680px;
     margin: 0 auto;
-    padding: 24px;
+    padding: 24px 24px 0;
   }
 
-  .header {
+  /* Progress dots */
+  .progress {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border, #e0e0e0);
+    justify-content: center;
+    gap: 8px;
+    padding-bottom: 24px;
+    flex-shrink: 0;
   }
 
-  h2 {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-primary, #1a1a1a);
-    margin: 0;
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--chrome-border);
+    transition: background 0.3s;
   }
 
-  .badge {
-    padding: 4px 10px;
-    background: var(--bg-muted, #f3f4f6);
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary, #666);
-    text-transform: capitalize;
+  .dot.filled {
+    background: var(--accent);
   }
 
+  /* Messages */
   .messages {
     flex: 1;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding-bottom: 16px;
+    gap: 24px;
+    padding-bottom: 24px;
+    min-height: 0;
   }
 
-  .message {
-    max-width: 85%;
-  }
-
-  .message.user {
-    align-self: flex-end;
-    background: var(--accent, #f97316);
-    color: white;
-    padding: 12px 16px;
-    border-radius: 16px 16px 4px 16px;
-  }
-
-  .message.ai {
-    align-self: flex-start;
-    background: var(--bg-surface, #f9fafb);
-    border: 1px solid var(--border, #e0e0e0);
-    padding: 12px 16px;
-    border-radius: 16px 16px 16px 4px;
-  }
-
-  .message.status {
-    align-self: center;
-  }
-
-  .status-text {
-    font-size: 13px;
-    color: var(--text-muted, #999);
-    font-style: italic;
+  /* AI messages */
+  .ai-msg {
+    max-width: 100%;
   }
 
   .msg-label {
     display: block;
+    font-family: 'Outfit', sans-serif;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted, #999);
-    margin-bottom: 4px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 6px;
   }
 
-  .message.user .msg-label {
-    color: rgba(255, 255, 255, 0.7);
+  .user-label {
+    color: var(--chrome-text-muted);
   }
 
-  .msg-content {
-    margin: 0;
+  .ai-msg .msg-text {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    font-size: 18px;
     line-height: 1.5;
+    color: var(--chrome-text);
+    margin: 0;
   }
 
-  /* Thought block */
-  .thought-block {
-    align-self: flex-start;
-    background: #fff8f0;
-    border: 1px solid #fed7aa;
+  /* User messages */
+  .user-msg {
+    max-width: 100%;
+  }
+
+  .user-block {
+    background: var(--paper);
     border-radius: 12px;
+    padding: 20px;
+  }
+
+  .user-block .msg-text {
+    font-family: 'Newsreader', serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  /* Thought blocks — marginalia style */
+  .thought-block {
+    background: var(--thought-bg);
+    border-left: 3px solid var(--thought-border);
     padding: 12px 16px;
-    width: 100%;
-    max-width: 85%;
+    border-radius: 0 8px 8px 0;
   }
 
   .thought-block summary {
+    font-family: 'Outfit', sans-serif;
     font-size: 13px;
     font-weight: 600;
-    color: #ea580c;
+    color: #d4a574;
     cursor: pointer;
+    list-style: none;
+  }
+
+  .thought-block summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .thought-block summary::before {
+    content: '\25B8  ';
+  }
+
+  .thought-block details[open] summary::before {
+    content: '\25BE  ';
   }
 
   .assessment {
+    font-family: 'Outfit', sans-serif;
     font-size: 14px;
-    color: var(--text-primary, #1a1a1a);
+    color: var(--chrome-text);
     line-height: 1.5;
     margin: 8px 0;
   }
 
   .missing {
     margin: 8px 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
   }
 
   .missing-label {
-    font-size: 12px;
     font-weight: 600;
-    color: var(--text-secondary, #666);
+    color: var(--chrome-text-muted);
   }
 
-  .missing ul {
-    margin: 4px 0 0;
-    padding-left: 20px;
-  }
-
-  .missing li {
-    font-size: 13px;
-    color: var(--text-secondary, #666);
-    margin: 2px 0;
+  .missing-items {
+    color: var(--chrome-text-muted);
   }
 
   .sufficient-badge {
     display: inline-block;
-    padding: 2px 8px;
-    background: #dcfce7;
-    color: #16a34a;
+    padding: 3px 10px;
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--success);
     border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
     font-size: 12px;
     font-weight: 600;
     margin-top: 4px;
   }
 
-  /* Input bar */
-  .input-bar {
+  /* Status */
+  .status-msg {
+    text-align: center;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
+    font-style: italic;
+  }
+
+  /* Input area */
+  .input-area {
     display: flex;
-    gap: 12px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border, #e0e0e0);
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 0 24px;
+    flex-shrink: 0;
   }
 
   textarea {
-    flex: 1;
-    padding: 12px 16px;
-    border: 1px solid var(--border, #e0e0e0);
+    width: 100%;
+    padding: 16px 20px;
+    background: var(--paper);
+    border: 1px solid var(--paper-border);
     border-radius: 12px;
-    font-size: 15px;
-    font-family: inherit;
-    resize: none;
-    color: var(--text-primary, #1a1a1a);
+    font-family: 'Newsreader', serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--ink);
+    resize: vertical;
+    min-height: 120px;
+  }
+
+  textarea::placeholder {
+    color: var(--ink-muted);
   }
 
   textarea:focus {
     outline: none;
-    border-color: var(--accent, #f97316);
+    border-color: var(--accent);
   }
 
   .send-btn {
-    padding: 12px 20px;
-    background: var(--accent, #f97316);
+    align-self: flex-end;
+    padding: 8px 20px;
+    background: var(--accent);
     color: white;
     border: none;
-    border-radius: 12px;
-    font-size: 15px;
+    border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s;
-    align-self: flex-end;
   }
 
   .send-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
@@ -312,30 +326,32 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    padding: 16px 20px;
+    background: var(--accent);
     border-radius: 12px;
-    margin-top: 16px;
+    margin: 16px 0 24px;
+    flex-shrink: 0;
   }
 
-  .ready-bar p {
-    margin: 0;
+  .ready-text {
+    font-family: 'Outfit', sans-serif;
     font-size: 15px;
-    color: #16a34a;
+    color: white;
     font-weight: 500;
   }
 
   .draft-btn {
-    padding: 10px 20px;
-    background: #16a34a;
-    color: white;
+    padding: 10px 24px;
+    background: white;
+    color: var(--accent);
     border: none;
     border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s;
+    white-space: nowrap;
   }
 
   .draft-btn:hover {
