@@ -105,7 +105,7 @@
         bind:value={input}
         onkeydown={handleKeydown}
         placeholder="Type your answer..."
-        rows="2"
+        rows="5"
       ></textarea>
       <button class="send-btn" onclick={sendAnswer} disabled={!input.trim()}>
         Send

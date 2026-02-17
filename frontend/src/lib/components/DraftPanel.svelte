@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { Draft } from '$lib/stores/drafts.svelte';
 
   interface Props {
@@ -7,6 +8,17 @@
   }
 
   let { draft, index }: Props = $props();
+  let contentEl = $state<HTMLDivElement>();
+
+  $effect(() => {
+    if (draft.streaming && draft.content && contentEl) {
+      tick().then(() => {
+        if (contentEl) {
+          contentEl.scrollTop = contentEl.scrollHeight;
+        }
+      });
+    }
+  });
 </script>
 
 <div class="draft-panel" class:streaming={draft.streaming} class:complete={draft.complete}>
@@ -29,6 +41,10 @@
         <div class="skeleton-line long"></div>
         <div class="skeleton-line short"></div>
       </div>
+    {:else if draft.streaming}
+      <div class="draft-content streaming-text" bind:this={contentEl}>
+        {draft.content}<span class="cursor-blink">|</span>
+      </div>
     {:else}
       <div class="draft-content">
         {#each draft.content.split('\n') as line}
@@ -37,9 +53,6 @@
           {/if}
         {/each}
       </div>
-      {#if draft.streaming}
-        <span class="cursor-blink">|</span>
-      {/if}
     {/if}
   </div>
 
@@ -94,6 +107,14 @@
     padding: 16px;
     overflow-y: auto;
     max-height: 400px;
+  }
+
+  .streaming-text {
+    white-space: pre-wrap;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary, #1a1a1a);
+    overflow-y: auto;
   }
 
   .draft-content p {
