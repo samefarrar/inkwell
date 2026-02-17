@@ -5,6 +5,13 @@
 
 import { StreamBuffer } from '$lib/stream-buffer.svelte';
 
+export interface Highlight {
+	start: number;
+	end: number;
+	sentiment: 'like' | 'flag';
+	note?: string;
+}
+
 export interface Draft {
 	title: string;
 	angle: string;
@@ -12,6 +19,7 @@ export interface Draft {
 	wordCount: number;
 	streaming: boolean;
 	complete: boolean;
+	highlights: Highlight[];
 }
 
 function createEmptyDraft(): Draft {
@@ -21,13 +29,20 @@ function createEmptyDraft(): Draft {
 		content: '',
 		wordCount: 0,
 		streaming: false,
-		complete: false
+		complete: false,
+		highlights: []
 	};
 }
 
 class DraftsStore {
 	drafts = $state<Draft[]>([createEmptyDraft(), createEmptyDraft(), createEmptyDraft()]);
 	private buffers: (StreamBuffer | null)[] = [null, null, null];
+
+	addHighlight(draftIndex: number, highlight: Highlight): void {
+		const draft = this.drafts[draftIndex];
+		if (!draft) return;
+		draft.highlights = [...draft.highlights, highlight];
+	}
 
 	startDraft(index: number, title: string, angle: string): void {
 		this.buffers[index]?.destroy();
@@ -38,7 +53,8 @@ class DraftsStore {
 			content: '',
 			wordCount: 0,
 			streaming: true,
-			complete: false
+			complete: false,
+			highlights: []
 		};
 
 		const draft = this.drafts[index];
