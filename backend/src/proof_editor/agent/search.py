@@ -60,7 +60,12 @@ class ExaSearchProvider:
 
         try:
             client = Exa(api_key=self.api_key)
-            result = client.search_and_contents(query, num_results=5, text=True)
+            result = client.search(
+                query,
+                type="auto",
+                num_results=5,
+                contents={"text": True},
+            )
             return [
                 SearchResult(
                     title=r.title or "",

@@ -106,7 +106,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 def main() -> None:
     """Run the server."""
+    from pathlib import Path
+
     import uvicorn
+    from dotenv import load_dotenv
+
+    # Load .env from project root before starting server
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+    load_dotenv(env_path)
 
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(
