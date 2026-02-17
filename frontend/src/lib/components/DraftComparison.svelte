@@ -18,23 +18,67 @@
     });
   }
 
+  function handleRemove(draftIndex: number, highlightIndex: number) {
+    drafts.removeHighlight(draftIndex, highlightIndex);
+    ws.send({
+      type: 'highlight.remove',
+      draft_index: draftIndex,
+      highlight_index: highlightIndex,
+    });
+  }
+
+  function handleLabelChange(draftIndex: number, highlightIndex: number, label: string) {
+    drafts.updateHighlightLabel(draftIndex, highlightIndex, label);
+    ws.send({
+      type: 'highlight.update',
+      draft_index: draftIndex,
+      highlight_index: highlightIndex,
+      label,
+    });
+  }
+
+  function handleEdit(draftIndex: number, content: string) {
+    drafts.updateDraftContent(draftIndex, content);
+    ws.send({
+      type: 'draft.edit',
+      draft_index: draftIndex,
+      content,
+    });
+  }
+
   function handleSynthesize() {
+    drafts.startSynthesis();
     ws.send({ type: 'draft.synthesize' });
   }
 
-  let totalHighlights = $derived(
-    drafts.drafts.reduce((sum, d) => sum + d.highlights.length, 0)
+  function handleFocus(draftIndex: number) {
+    // Future: transition to focused editing mode
+    session.goToFocus();
+  }
+
+  let roundLabel = $derived(
+    drafts.synthesisRound > 0
+      ? `Round ${drafts.synthesisRound + 1}`
+      : ''
   );
 </script>
 
 <div class="draft-comparison">
   <div class="header">
-    <h2>Three angles on your {session.taskType}</h2>
-    <p class="subtitle">
-      {#if drafts.allComplete}
-        Select text in any draft to highlight what you like or flag what needs work.
+    <h2>
+      {#if drafts.synthesisRound > 0}
+        Refined drafts {roundLabel}
       {:else}
-        Compare, highlight what you like, or pick one to focus on.
+        Three angles on your {session.taskType}
+      {/if}
+    </h2>
+    <p class="subtitle">
+      {#if drafts.synthesizing}
+        Synthesizing new drafts from your feedback...
+      {:else if drafts.allComplete}
+        Select text to highlight, edit directly, or focus on a draft.
+      {:else}
+        Drafts are generating...
       {/if}
     </p>
   </div>
@@ -45,24 +89,41 @@
         {draft}
         index={i}
         onhighlight={(data) => handleHighlight(i, data)}
+        onremove={(hlIdx) => handleRemove(i, hlIdx)}
+        onlabelchange={(hlIdx, label) => handleLabelChange(i, hlIdx, label)}
+        onedit={(content) => handleEdit(i, content)}
+        onfocus={() => handleFocus(i)}
       />
     {/each}
   </div>
 
-  {#if drafts.allComplete}
+  {#if drafts.allComplete && !drafts.synthesizing}
     <div class="actions">
-      {#if totalHighlights > 0}
+      {#if drafts.totalHighlights > 0}
         <span class="hl-summary">
-          {totalHighlights} highlight{totalHighlights === 1 ? '' : 's'} across drafts
+          {drafts.totalHighlights} highlight{drafts.totalHighlights === 1 ? '' : 's'} across drafts
         </span>
         <button class="synthesize-btn" onclick={handleSynthesize}>
-          Synthesize into a new draft
+          {#if drafts.synthesisRound > 0}
+            Re-synthesize
+          {:else}
+            Synthesize into new drafts
+          {/if}
         </button>
       {:else}
         <p class="hint">
           Select text in any draft to highlight favorites or flag sections to fix.
         </p>
       {/if}
+    </div>
+  {/if}
+
+  {#if drafts.synthesizing}
+    <div class="actions">
+      <div class="synth-loading">
+        <span class="synth-dot"></span>
+        Generating refined drafts...
+      </div>
     </div>
   {/if}
 </div>
@@ -164,5 +225,29 @@
 
   .synthesize-btn:active {
     transform: scale(0.97);
+  }
+
+  /* Synthesis loading state */
+  .synth-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .synth-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
   }
 </style>

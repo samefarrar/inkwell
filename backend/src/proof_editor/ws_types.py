@@ -24,7 +24,27 @@ class DraftHighlight(BaseModel):
     start: int
     end: int
     sentiment: Literal["like", "flag"]
+    label: str | None = None
     note: str | None = None
+
+
+class HighlightUpdate(BaseModel):
+    type: Literal["highlight.update"] = "highlight.update"
+    draft_index: int
+    highlight_index: int  # position in the highlights array
+    label: str  # new custom label (snake_cased)
+
+
+class HighlightRemove(BaseModel):
+    type: Literal["highlight.remove"] = "highlight.remove"
+    draft_index: int
+    highlight_index: int
+
+
+class DraftEdit(BaseModel):
+    type: Literal["draft.edit"] = "draft.edit"
+    draft_index: int
+    content: str
 
 
 class DraftSynthesize(BaseModel):
@@ -96,7 +116,15 @@ class ErrorMessage(BaseModel):
 
 
 # Discriminated union for parsing incoming messages
-ClientMessage = TaskSelect | InterviewAnswer | DraftHighlight | DraftSynthesize
+ClientMessage = (
+    TaskSelect
+    | InterviewAnswer
+    | DraftHighlight
+    | HighlightUpdate
+    | HighlightRemove
+    | DraftEdit
+    | DraftSynthesize
+)
 
 ServerMessage = (
     ThoughtMessage

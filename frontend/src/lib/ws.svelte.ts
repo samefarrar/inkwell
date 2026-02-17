@@ -25,8 +25,12 @@ export type ClientMessage =
       start: number;
       end: number;
       sentiment: 'like' | 'flag';
+      label?: string;
       note?: string;
     }
+  | { type: 'highlight.update'; draft_index: number; highlight_index: number; label: string }
+  | { type: 'highlight.remove'; draft_index: number; highlight_index: number }
+  | { type: 'draft.edit'; draft_index: number; content: string }
   | { type: 'draft.synthesize' };
 
 type MessageHandler = (msg: ServerMessage) => void;

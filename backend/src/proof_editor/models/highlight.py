@@ -13,5 +13,6 @@ class Highlight(SQLModel, table=True):
     end: int
     text: str = ""
     sentiment: str  # "like" or "flag"
+    label: str = ""  # custom snake_cased label (empty = use sentiment as tag)
     note: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

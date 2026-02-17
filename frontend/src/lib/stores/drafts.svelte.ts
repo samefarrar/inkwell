@@ -1,6 +1,7 @@
 /**
  * Drafts store — tracks 3 draft objects with streaming state.
  * Integrates StreamBuffer for smooth typewriter rendering.
+ * Supports iterative synthesis rounds with highlight editing.
  */
 
 import { StreamBuffer } from '$lib/stream-buffer.svelte';
@@ -9,6 +10,7 @@ export interface Highlight {
 	start: number;
 	end: number;
 	sentiment: 'like' | 'flag';
+	label?: string;
 	note?: string;
 }
 
@@ -36,12 +38,35 @@ function createEmptyDraft(): Draft {
 
 class DraftsStore {
 	drafts = $state<Draft[]>([createEmptyDraft(), createEmptyDraft(), createEmptyDraft()]);
+	synthesisRound = $state(0);
+	synthesizing = $state(false);
 	private buffers: (StreamBuffer | null)[] = [null, null, null];
 
 	addHighlight(draftIndex: number, highlight: Highlight): void {
 		const draft = this.drafts[draftIndex];
 		if (!draft) return;
 		draft.highlights = [...draft.highlights, highlight];
+	}
+
+	removeHighlight(draftIndex: number, highlightIndex: number): void {
+		const draft = this.drafts[draftIndex];
+		if (!draft) return;
+		draft.highlights = draft.highlights.filter((_, i) => i !== highlightIndex);
+	}
+
+	updateHighlightLabel(draftIndex: number, highlightIndex: number, label: string): void {
+		const draft = this.drafts[draftIndex];
+		if (!draft || highlightIndex >= draft.highlights.length) return;
+		draft.highlights = draft.highlights.map((h, i) =>
+			i === highlightIndex ? { ...h, label } : h
+		);
+	}
+
+	updateDraftContent(draftIndex: number, content: string): void {
+		const draft = this.drafts[draftIndex];
+		if (!draft) return;
+		draft.content = content;
+		draft.wordCount = content.split(/\s+/).filter(Boolean).length;
 	}
 
 	startDraft(index: number, title: string, angle: string): void {
@@ -86,6 +111,16 @@ class DraftsStore {
 		draft.wordCount = wordCount;
 		draft.complete = true;
 		draft.streaming = false;
+
+		// Check if all drafts complete after synthesis
+		if (this.synthesizing && this.allComplete) {
+			this.synthesizing = false;
+		}
+	}
+
+	startSynthesis(): void {
+		this.synthesizing = true;
+		this.synthesisRound++;
 	}
 
 	get allComplete(): boolean {
@@ -96,10 +131,16 @@ class DraftsStore {
 		return this.drafts.some((d) => d.streaming || d.complete);
 	}
 
+	get totalHighlights(): number {
+		return this.drafts.reduce((sum, d) => sum + d.highlights.length, 0);
+	}
+
 	reset(): void {
 		this.buffers.forEach((b) => b?.destroy());
 		this.buffers = [null, null, null];
 		this.drafts = [createEmptyDraft(), createEmptyDraft(), createEmptyDraft()];
+		this.synthesisRound = 0;
+		this.synthesizing = false;
 	}
 }
 

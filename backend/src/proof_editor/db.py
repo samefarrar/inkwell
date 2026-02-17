@@ -15,6 +15,7 @@ def create_tables() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     # Import models so SQLModel registers them
     from proof_editor.models import (  # noqa: F401
+        draft,
         feedback,
         highlight,
         preference,

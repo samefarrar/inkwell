@@ -12,9 +12,12 @@ from pydantic import ValidationError
 from proof_editor.agent.orchestrator import Orchestrator
 from proof_editor.db import create_tables
 from proof_editor.ws_types import (
+    DraftEdit,
     DraftHighlight,
     DraftSynthesize,
     ErrorMessage,
+    HighlightRemove,
+    HighlightUpdate,
     InterviewAnswer,
     TaskSelect,
 )
@@ -76,17 +79,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             msg_type = data.get("type")
             try:
                 if msg_type == "task.select":
-                    msg = TaskSelect(**data)
-                    await orchestrator.handle_task_select(msg)
+                    await orchestrator.handle_task_select(TaskSelect(**data))
                 elif msg_type == "interview.answer":
-                    msg_answer = InterviewAnswer(**data)
-                    await orchestrator.handle_interview_answer(msg_answer)
+                    await orchestrator.handle_interview_answer(InterviewAnswer(**data))
                 elif msg_type == "draft.highlight":
-                    msg_highlight = DraftHighlight(**data)
-                    await orchestrator.handle_highlight(msg_highlight)
+                    await orchestrator.handle_highlight(DraftHighlight(**data))
+                elif msg_type == "highlight.update":
+                    await orchestrator.handle_highlight_update(HighlightUpdate(**data))
+                elif msg_type == "highlight.remove":
+                    await orchestrator.handle_highlight_remove(HighlightRemove(**data))
+                elif msg_type == "draft.edit":
+                    msg_edit = DraftEdit(**data)
+                    await orchestrator.handle_draft_edit(
+                        msg_edit.draft_index, msg_edit.content
+                    )
                 elif msg_type == "draft.synthesize":
-                    msg_synth = DraftSynthesize(**data)
-                    await orchestrator.handle_synthesize(msg_synth)
+                    await orchestrator.handle_synthesize(DraftSynthesize(**data))
                 else:
                     await websocket.send_text(
                         ErrorMessage(

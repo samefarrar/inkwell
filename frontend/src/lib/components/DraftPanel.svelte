@@ -6,12 +6,19 @@
     draft: Draft;
     index: number;
     onhighlight?: (data: { start: number; end: number; sentiment: 'like' | 'flag' }) => void;
+    onremove?: (highlightIndex: number) => void;
+    onlabelchange?: (highlightIndex: number, label: string) => void;
+    onedit?: (content: string) => void;
+    onfocus?: () => void;
   }
 
-  let { draft, index, onhighlight }: Props = $props();
+  let { draft, index, onhighlight, onremove, onlabelchange, onedit, onfocus }: Props = $props();
   let bodyEl = $state<HTMLDivElement>();
   let textEl = $state<HTMLDivElement>();
   let popover = $state<{ x: number; y: number; start: number; end: number } | null>(null);
+  let labelPopover = $state<{ highlightIndex: number; x: number; y: number } | null>(null);
+  let labelInput = $state('');
+  let hoveredHighlight = $state<number | null>(null);
 
   $effect(() => {
     if (draft.streaming && draft.content && bodyEl) {
@@ -37,6 +44,8 @@
   function handleMouseUp(e: MouseEvent) {
     // Don't dismiss popover when clicking its buttons
     if ((e.target as HTMLElement).closest('.highlight-popover')) return;
+    if ((e.target as HTMLElement).closest('.label-popover')) return;
+    if ((e.target as HTMLElement).closest('.hl-controls')) return;
 
     if (!draft.complete || !textEl || !bodyEl) {
       popover = null;
@@ -82,19 +91,77 @@
     popover = null;
   }
 
-  type Segment = { text: string; sentiment?: 'like' | 'flag' };
+  function handleRemove(highlightIndex: number) {
+    onremove?.(highlightIndex);
+    hoveredHighlight = null;
+  }
+
+  function openLabelPopover(highlightIndex: number, e: MouseEvent) {
+    e.stopPropagation();
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const bodyRect = bodyEl!.getBoundingClientRect();
+    labelInput = draft.highlights[highlightIndex]?.label ?? '';
+    labelPopover = {
+      highlightIndex,
+      x: rect.left - bodyRect.left + rect.width / 2,
+      y: rect.bottom - bodyRect.top + bodyEl!.scrollTop + 4,
+    };
+  }
+
+  function submitLabel() {
+    if (labelPopover === null) return;
+    const snaked = labelInput.trim().toLowerCase().replace(/\s+/g, '_');
+    onlabelchange?.(labelPopover.highlightIndex, snaked);
+    labelPopover = null;
+    labelInput = '';
+  }
+
+  function handleLabelKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitLabel();
+    } else if (e.key === 'Escape') {
+      labelPopover = null;
+      labelInput = '';
+    }
+  }
+
+  /** Handle contenteditable input for draft editing. */
+  function handleInput() {
+    if (!textEl) return;
+    const newContent = textEl.textContent ?? '';
+    if (newContent !== draft.content) {
+      onedit?.(newContent);
+    }
+  }
+
+  type Segment = {
+    text: string;
+    sentiment?: 'like' | 'flag';
+    label?: string;
+    highlightIndex?: number;
+  };
 
   function buildSegments(content: string, highlights: Highlight[]): Segment[] {
     if (!highlights.length) return [{ text: content }];
 
-    const sorted = [...highlights].sort((a, b) => a.start - b.start);
+    const sorted = highlights
+      .map((hl, idx) => ({ ...hl, originalIndex: idx }))
+      .sort((a, b) => a.start - b.start);
     const segments: Segment[] = [];
     let pos = 0;
 
     for (const hl of sorted) {
       const s = Math.max(hl.start, pos);
       if (s > pos) segments.push({ text: content.slice(pos, s) });
-      if (hl.end > s) segments.push({ text: content.slice(s, hl.end), sentiment: hl.sentiment });
+      if (hl.end > s) {
+        segments.push({
+          text: content.slice(s, hl.end),
+          sentiment: hl.sentiment,
+          label: hl.label,
+          highlightIndex: hl.originalIndex,
+        });
+      }
       pos = Math.max(pos, hl.end);
     }
 
@@ -146,10 +213,41 @@
         {draft.content}<span class="ember-cursor"></span>
       </div>
     {:else}
-      <div class="draft-content" bind:this={textEl}>
+      <div
+        class="draft-content"
+        bind:this={textEl}
+        contenteditable="true"
+        oninput={handleInput}
+        role="textbox"
+        tabindex="0"
+      >
         {#each segments as seg}
-          {#if seg.sentiment}
-            <span class="hl hl-{seg.sentiment}">{seg.text}</span>
+          {#if seg.sentiment !== undefined && seg.highlightIndex !== undefined}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span
+              class="hl hl-{seg.sentiment}"
+              onmouseenter={() => (hoveredHighlight = seg.highlightIndex!)}
+              onmouseleave={() => (hoveredHighlight = null)}
+            >
+              {#if seg.label}
+                <span class="hl-label">{seg.label}</span>
+              {/if}
+              {seg.text}
+              {#if hoveredHighlight === seg.highlightIndex}
+                <span class="hl-controls">
+                  <button
+                    class="hl-ctrl-btn"
+                    title="Set label"
+                    onclick={(e) => openLabelPopover(seg.highlightIndex!, e)}
+                  >&#9881;</button>
+                  <button
+                    class="hl-ctrl-btn remove"
+                    title="Remove highlight"
+                    onclick={() => handleRemove(seg.highlightIndex!)}
+                  >&#10005;</button>
+                </span>
+              {/if}
+            </span>
           {:else}{seg.text}{/if}
         {/each}
       </div>
@@ -168,11 +266,27 @@
         </button>
       </div>
     {/if}
+
+    {#if labelPopover}
+      <div
+        class="label-popover"
+        style="left: {labelPopover.x}px; top: {labelPopover.y}px;"
+      >
+        <input
+          type="text"
+          class="label-input"
+          placeholder="e.g. Too Formal"
+          bind:value={labelInput}
+          onkeydown={handleLabelKeydown}
+        />
+        <button class="label-submit" onclick={submitLabel}>Set</button>
+      </div>
+    {/if}
   </div>
 
   {#if draft.complete}
     <div class="panel-footer">
-      <button class="focus-btn">Focus on this</button>
+      <button class="focus-btn" onclick={() => onfocus?.()}>Focus on this</button>
     </div>
   {/if}
 </div>
@@ -277,6 +391,12 @@
     color: var(--ink);
     white-space: pre-wrap;
     word-wrap: break-word;
+    outline: none;
+  }
+
+  .draft-content[contenteditable="true"]:focus {
+    box-shadow: inset 0 0 0 2px rgba(232, 115, 58, 0.15);
+    border-radius: 4px;
   }
 
   .ember-cursor {
@@ -307,6 +427,7 @@
     border-radius: 2px;
     padding: 1px 0;
     transition: background 0.2s;
+    position: relative;
   }
 
   .hl-like {
@@ -317,6 +438,59 @@
   .hl-flag {
     background: rgba(232, 115, 58, 0.15);
     border-bottom: 2px solid rgba(232, 115, 58, 0.4);
+  }
+
+  /* Highlight label tag */
+  .hl-label {
+    display: inline-block;
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--ink-secondary);
+    background: var(--paper-surface);
+    border: 1px solid var(--paper-border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-right: 4px;
+    vertical-align: middle;
+    line-height: 1.4;
+  }
+
+  /* Highlight hover controls */
+  .hl-controls {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: popIn 0.1s ease-out;
+  }
+
+  .hl-ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 3px;
+    background: var(--paper-surface);
+    color: var(--ink-muted);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .hl-ctrl-btn:hover {
+    background: var(--paper-border);
+    color: var(--ink);
+  }
+
+  .hl-ctrl-btn.remove:hover {
+    background: rgba(232, 115, 58, 0.3);
+    color: var(--accent);
   }
 
   /* Highlight popover */
@@ -366,6 +540,53 @@
 
   .hl-btn.flag:hover {
     background: rgba(232, 115, 58, 0.3);
+  }
+
+  /* Label popover */
+  .label-popover {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: var(--chrome);
+    border: 1px solid var(--chrome-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 11;
+    animation: popIn 0.15s ease-out;
+  }
+
+  .label-input {
+    width: 120px;
+    padding: 4px 8px;
+    border: 1px solid var(--chrome-border);
+    border-radius: 5px;
+    background: var(--chrome-surface);
+    color: var(--chrome-text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .label-input:focus {
+    border-color: var(--accent);
+  }
+
+  .label-submit {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 5px;
+    background: var(--accent);
+    color: white;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .label-submit:hover {
+    background: #d4622e;
   }
 
   /* Skeleton */

@@ -12,6 +12,8 @@ from proof_editor.ws_types import (
     DraftHighlight,
     DraftSynthesize,
     ErrorMessage,
+    HighlightRemove,
+    HighlightUpdate,
     InterviewAnswer,
     StatusMessage,
     TaskSelect,
@@ -34,6 +36,7 @@ class Orchestrator:
         self.highlights: list[dict[str, Any]] = []
         self.interview_summary: str = ""
         self.key_material: list[str] = []
+        self.synthesis_round: int = 0
 
         # These get initialized lazily to avoid import-time LLM setup
         self._interviewer: Any = None
@@ -56,6 +59,7 @@ class Orchestrator:
         self.conversation_history = []
         self.drafts = []
         self.highlights = []
+        self.synthesis_round = 0
 
         # Create DB session
         with get_session() as db:
@@ -120,7 +124,30 @@ class Orchestrator:
 
         drafts = await self._generator.generate()
         self.drafts = drafts
+        self._save_drafts()
         self.state = "highlighting"
+
+    def _save_drafts(self) -> None:
+        """Persist current drafts to database."""
+        if not self.session_id:
+            return
+
+        from proof_editor.db import get_session
+        from proof_editor.models.draft import Draft
+
+        with get_session() as db:
+            for i, d in enumerate(self.drafts):
+                draft = Draft(
+                    session_id=self.session_id,
+                    draft_index=i,
+                    title=d.get("title", ""),
+                    angle=d.get("angle", ""),
+                    content=d.get("content", ""),
+                    word_count=d.get("word_count", 0),
+                    round=self.synthesis_round,
+                )
+                db.add(draft)
+            db.commit()
 
     async def handle_highlight(self, msg: DraftHighlight) -> None:
         """Handle highlight from user across drafts."""
@@ -128,15 +155,25 @@ class Orchestrator:
             await self.send(ErrorMessage(message="Not in highlighting state"))
             return
 
-        self.highlights.append(
-            {
-                "draft_index": msg.draft_index,
-                "start": msg.start,
-                "end": msg.end,
-                "sentiment": msg.sentiment,
-                "note": msg.note,
-            }
+        # Extract highlighted text from draft content
+        draft = (
+            self.drafts[msg.draft_index] if msg.draft_index < len(self.drafts) else None
         )
+        text = ""
+        if draft:
+            content = draft.get("content", "")
+            text = content[msg.start : msg.end]
+
+        highlight_data = {
+            "draft_index": msg.draft_index,
+            "start": msg.start,
+            "end": msg.end,
+            "text": text,
+            "sentiment": msg.sentiment,
+            "label": msg.label or "",
+            "note": msg.note,
+        }
+        self.highlights.append(highlight_data)
 
         # Store in DB
         if self.session_id:
@@ -149,17 +186,143 @@ class Orchestrator:
                     draft_index=msg.draft_index,
                     start=msg.start,
                     end=msg.end,
+                    text=text,
                     sentiment=msg.sentiment,
+                    label=msg.label or "",
                     note=msg.note,
                 )
                 db.add(highlight)
                 db.commit()
 
-    async def handle_synthesize(self, msg: DraftSynthesize) -> None:
-        """Handle synthesis request — merge highlighted favorites."""
+    async def handle_highlight_update(self, msg: HighlightUpdate) -> None:
+        """Update the label on an existing highlight."""
         if self.state != "highlighting":
             await self.send(ErrorMessage(message="Not in highlighting state"))
             return
 
-        # Synthesis is Phase 4 — for now, acknowledge
-        await self.send(StatusMessage(message="Synthesis coming in Phase 4"))
+        # Find highlights for this draft
+        draft_hl = [
+            (i, h)
+            for i, h in enumerate(self.highlights)
+            if h["draft_index"] == msg.draft_index
+        ]
+        if msg.highlight_index >= len(draft_hl):
+            await self.send(ErrorMessage(message="Highlight not found"))
+            return
+
+        global_idx = draft_hl[msg.highlight_index][0]
+        self.highlights[global_idx]["label"] = msg.label
+
+        # Update in DB
+        if self.session_id:
+            from sqlmodel import select
+
+            from proof_editor.db import get_session
+            from proof_editor.models.highlight import Highlight
+
+            with get_session() as db:
+                stmt = (
+                    select(Highlight)
+                    .where(Highlight.session_id == self.session_id)
+                    .where(Highlight.draft_index == msg.draft_index)
+                    .order_by(Highlight.id)
+                )
+                results = db.exec(stmt).all()
+                if msg.highlight_index < len(results):
+                    results[msg.highlight_index].label = msg.label
+                    db.commit()
+
+    async def handle_highlight_remove(self, msg: HighlightRemove) -> None:
+        """Remove a highlight."""
+        if self.state != "highlighting":
+            await self.send(ErrorMessage(message="Not in highlighting state"))
+            return
+
+        # Find highlights for this draft
+        draft_hl = [
+            (i, h)
+            for i, h in enumerate(self.highlights)
+            if h["draft_index"] == msg.draft_index
+        ]
+        if msg.highlight_index >= len(draft_hl):
+            await self.send(ErrorMessage(message="Highlight not found"))
+            return
+
+        global_idx = draft_hl[msg.highlight_index][0]
+        self.highlights.pop(global_idx)
+
+        # Remove from DB
+        if self.session_id:
+            from sqlmodel import select
+
+            from proof_editor.db import get_session
+            from proof_editor.models.highlight import Highlight
+
+            with get_session() as db:
+                stmt = (
+                    select(Highlight)
+                    .where(Highlight.session_id == self.session_id)
+                    .where(Highlight.draft_index == msg.draft_index)
+                    .order_by(Highlight.id)
+                )
+                results = db.exec(stmt).all()
+                if msg.highlight_index < len(results):
+                    db.delete(results[msg.highlight_index])
+                    db.commit()
+
+    async def handle_draft_edit(self, draft_index: int, content: str) -> None:
+        """Handle user manually editing draft content."""
+        if self.state != "highlighting":
+            return
+
+        if draft_index < len(self.drafts):
+            self.drafts[draft_index]["content"] = content
+            self.drafts[draft_index]["word_count"] = len(content.split())
+
+    async def handle_synthesize(self, msg: DraftSynthesize) -> None:
+        """Synthesize 3 new drafts from highlight feedback."""
+        if self.state != "highlighting":
+            await self.send(ErrorMessage(message="Not in highlighting state"))
+            return
+
+        if not self.highlights:
+            await self.send(
+                ErrorMessage(message="Add some highlights before synthesizing")
+            )
+            return
+
+        from proof_editor.drafting.synthesizer import DraftSynthesizer
+        from proof_editor.examples.loader import (
+            format_examples_for_prompt,
+            load_examples,
+        )
+
+        self.state = "drafting"
+        self.synthesis_round += 1
+
+        await self.send(
+            StatusMessage(message=f"Synthesizing round {self.synthesis_round}...")
+        )
+
+        examples = load_examples()
+        examples_context = format_examples_for_prompt(examples)
+
+        synthesizer = DraftSynthesizer(
+            task_type=self.task_type,
+            topic=self.topic,
+            interview_summary=self.interview_summary,
+            key_material=self.key_material,
+            drafts=self.drafts,
+            highlights=self.highlights,
+            websocket=self.ws,
+            round_num=self.synthesis_round,
+            examples_context=examples_context,
+        )
+
+        new_drafts = await synthesizer.synthesize()
+
+        # Store previous highlights, then reset for new round
+        self.drafts = new_drafts
+        self.highlights = []
+        self._save_drafts()
+        self.state = "highlighting"
