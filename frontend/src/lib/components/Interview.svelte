@@ -112,9 +112,10 @@
     display: flex;
     flex-direction: column;
     height: calc(100vh - 48px);
-    max-width: 680px;
+    width: 100%;
+    max-width: 800px;
     margin: 0 auto;
-    padding: 24px 24px 0;
+    padding: 24px 32px 0;
   }
 
   /* Progress dots */

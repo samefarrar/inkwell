@@ -42,7 +42,7 @@ class DraftsStore {
 		};
 
 		const draft = this.drafts[index];
-		this.buffers[index] = new StreamBuffer(draft, () => {
+		this.buffers[index] = new StreamBuffer(draft, 'content', () => {
 			draft.wordCount = draft.content.split(/\s+/).filter(Boolean).length;
 		});
 	}

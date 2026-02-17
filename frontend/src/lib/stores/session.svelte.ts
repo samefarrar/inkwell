@@ -34,8 +34,10 @@ class SessionStore {
     this.screen = 'interview';
   }
 
-  addMessage(msg: ChatMessage): void {
+  addMessage(msg: ChatMessage): ChatMessage {
     this.messages = [...this.messages, msg];
+    // Return the reactive proxy (last element of the $state array)
+    return this.messages[this.messages.length - 1];
   }
 
   setReadyToDraft(summary: string, keyMaterial: string[]): void {

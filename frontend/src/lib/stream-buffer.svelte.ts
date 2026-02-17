@@ -8,13 +8,21 @@
 
 export class StreamBuffer {
 	private buffer = '';
-	private target: { content: string };
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private target: Record<string, any>;
+	private key: string;
 	private rafId: number | null = null;
 	private charsPerFrame = 3;
 	private onUpdate?: () => void;
 
-	constructor(target: { content: string }, onUpdate?: () => void) {
+	constructor(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		target: Record<string, any>,
+		key: string = 'content',
+		onUpdate?: () => void
+	) {
 		this.target = target;
+		this.key = key;
 		this.onUpdate = onUpdate;
 	}
 
@@ -32,7 +40,7 @@ export class StreamBuffer {
 			cancelAnimationFrame(this.rafId);
 			this.rafId = null;
 		}
-		this.target.content += this.buffer;
+		this.target[this.key] += this.buffer;
 		this.buffer = '';
 		this.onUpdate?.();
 	}
@@ -54,7 +62,7 @@ export class StreamBuffer {
 
 		const chunk = this.buffer.slice(0, this.charsPerFrame);
 		this.buffer = this.buffer.slice(this.charsPerFrame);
-		this.target.content += chunk;
+		this.target[this.key] += chunk;
 		this.onUpdate?.();
 
 		this.rafId = requestAnimationFrame(() => this.drain());

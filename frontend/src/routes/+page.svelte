@@ -3,35 +3,48 @@
   import { ws, type ServerMessage } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
+  import { StreamBuffer } from '$lib/stream-buffer.svelte';
   import TaskSelector from '$lib/components/TaskSelector.svelte';
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
 
   let unsubscribe: (() => void) | undefined;
+  let activeBuffers: StreamBuffer[] = [];
 
   onMount(() => {
     ws.connect();
 
     unsubscribe = ws.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
-        case 'thought':
-          session.addMessage({
+        case 'thought': {
+          const thoughtMsg = session.addMessage({
             role: 'thought',
-            content: msg.assessment,
+            content: '',
             thought: {
-              assessment: msg.assessment,
+              assessment: '',
               missing: msg.missing,
               sufficient: msg.sufficient
             }
           });
-          break;
-
-        case 'interview.question':
-          session.addMessage({
-            role: 'ai',
-            content: msg.question
+          // Stream the assessment into thought.assessment, mirror to content
+          const tBuf = new StreamBuffer(thoughtMsg.thought!, 'assessment', () => {
+            thoughtMsg.content = thoughtMsg.thought!.assessment;
           });
+          tBuf.push(msg.assessment);
+          activeBuffers.push(tBuf);
           break;
+        }
+
+        case 'interview.question': {
+          const qMsg = session.addMessage({
+            role: 'ai',
+            content: ''
+          });
+          const qBuf = new StreamBuffer(qMsg, 'content');
+          qBuf.push(msg.question);
+          activeBuffers.push(qBuf);
+          break;
+        }
 
         case 'ready_to_draft':
           session.setReadyToDraft(msg.summary, msg.key_material);
