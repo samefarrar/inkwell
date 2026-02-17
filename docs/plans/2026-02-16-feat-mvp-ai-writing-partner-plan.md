@@ -59,39 +59,39 @@ Set up both projects with all dependencies, shared types, and a working "hello w
 
 **Backend tasks:**
 
-- [ ] Initialize `backend/` with `uv init` and `pyproject.toml`
+- [x] Initialize `backend/` with `uv init` and `pyproject.toml`
   - Dependencies: `fastapi`, `uvicorn[standard]`, `litellm`, `sqlmodel`, `httpx`, `python-frontmatter`
   - Dev dependencies: `pytest`, `pytest-anyio`, `ruff`, `mypy`
-- [ ] Create `backend/src/proof_editor/__init__.py` and `main.py`
+- [x] Create `backend/src/proof_editor/__init__.py` and `main.py`
   - FastAPI app with CORS middleware (allow localhost:5173)
   - WebSocket endpoint at `/ws`
   - Health check at `GET /health`
-- [ ] Create `backend/src/proof_editor/models/` with SQLModel schemas
+- [x] Create `backend/src/proof_editor/models/` with SQLModel schemas
   - `session.py`: `Session(id, task_type, topic, status, created_at)`
   - `feedback.py`: `Feedback(id, session_id, draft_index, text, replacement, accepted, rule_id, created_at)`
   - `highlight.py`: `Highlight(id, session_id, draft_index, start, end, sentiment, note, created_at)`
   - `preference.py`: `Preference(id, key, value, updated_at)`
-- [ ] Create `backend/src/proof_editor/db.py`
+- [x] Create `backend/src/proof_editor/db.py`
   - SQLite engine setup (`data/proof_editor.db`)
   - `create_tables()` on startup
-- [ ] Create shared WebSocket message types in `backend/src/proof_editor/ws_types.py`
+- [x] Create shared WebSocket message types in `backend/src/proof_editor/ws_types.py`
   - Pydantic models for all client→server and server→client messages
   - Discriminated union via `type` field
-- [ ] Add `.gitignore` (Python + Node + SQLite + .DS_Store)
+- [x] Add `.gitignore` (Python + Node + SQLite + .DS_Store)
 
 **Frontend tasks:**
 
-- [ ] Initialize `frontend/` with `npx sv create` (SvelteKit, TypeScript)
-- [ ] Install dependencies: `@tiptap/core`, `@tiptap/starter-kit`, `@tiptap/extension-highlight`, `@tiptap/extension-collaboration`
-- [ ] Create `frontend/src/lib/ws.ts` — WebSocket client
+- [x] Initialize `frontend/` with `npx sv create` (SvelteKit, TypeScript)
+- [x] Install dependencies: `@tiptap/core`, `@tiptap/starter-kit`, `@tiptap/extension-highlight`, `@tiptap/extension-collaboration`
+- [x] Create `frontend/src/lib/ws.ts` — WebSocket client
   - Connect to `ws://localhost:8000/ws`
   - Auto-reconnect with exponential backoff
   - Typed message send/receive matching backend ws_types
-- [ ] Create `frontend/src/lib/stores/session.svelte.ts` — session state store (Runes)
+- [x] Create `frontend/src/lib/stores/session.svelte.ts` — session state store (Runes)
   - Current screen, session data, drafts, highlights
-- [ ] Create minimal route at `frontend/src/routes/+page.svelte`
+- [x] Create minimal route at `frontend/src/routes/+page.svelte`
   - Screen router based on session state
-- [ ] Verify round-trip: frontend sends `task.select`, backend echoes acknowledgement
+- [x] Verify round-trip: frontend sends `task.select`, backend echoes acknowledgement
 
 **Success criteria:** `uv run python -m proof_editor` starts backend, `npm run dev` starts frontend, WebSocket connects and messages flow both directions.
 
@@ -187,11 +187,11 @@ The core interaction loop — user enters task, AI interviews them one question 
 
 **Backend tasks:**
 
-- [ ] Create `backend/src/proof_editor/agent/orchestrator.py`
+- [x] Create `backend/src/proof_editor/agent/orchestrator.py`
   - Manages session state machine: `task_select → interview → drafting → highlighting → focused`
   - Routes WebSocket messages to appropriate handler
   - Holds conversation history per session
-- [ ] Create `backend/src/proof_editor/agent/interviewer.py`
+- [x] Create `backend/src/proof_editor/agent/interviewer.py`
   - System prompt: "You are an AI writing partner. Interview the user to extract real stories, insights, and experiences. Ask ONE question at a time. After each answer, assess what you know vs what's missing."
   - LiteLLM tool definitions:
     ```python
@@ -222,22 +222,22 @@ The core interaction loop — user enters task, AI interviews them one question 
     ```
   - Process: receive answer → append to conversation → call LiteLLM → parse tool calls → send as WebSocket messages
   - When `ready_to_draft` is called, transition to drafting phase
-- [ ] Create `backend/src/proof_editor/examples/loader.py`
+- [x] Create `backend/src/proof_editor/examples/loader.py`
   - On startup, read all `.md` and `.txt` files from `inspo/`
   - Store as list of `Example(title, content, word_count)`
   - Inject into interviewer system prompt as style reference
-- [ ] Write tests: `tests/test_interviewer.py`
+- [x] Write tests: `tests/test_interviewer.py`
   - Test tool call parsing
   - Test sufficiency assessment triggers `ready_to_draft`
   - Test conversation history accumulation
 
 **Frontend tasks:**
 
-- [ ] Create `frontend/src/lib/components/TaskSelector.svelte`
+- [x] Create `frontend/src/lib/components/TaskSelector.svelte`
   - Writing type dropdown: Essay, Review, Newsletter, Landing Page, Blog Post
   - Topic text input
   - "Start Interview" button → sends `task.select` over WebSocket
-- [ ] Create `frontend/src/lib/components/Interview.svelte`
+- [x] Create `frontend/src/lib/components/Interview.svelte`
   - Chat-style layout: messages scroll down
   - AI messages: rendered from `interview.question` WebSocket messages
   - User messages: text input → sends `interview.answer`
@@ -254,7 +254,7 @@ Generate 3 drafts in different angles, streaming all simultaneously over WebSock
 
 **Backend tasks:**
 
-- [ ] Create `backend/src/proof_editor/drafting/generator.py`
+- [x] Create `backend/src/proof_editor/drafting/generator.py`
   - `generate_drafts(session, interview_material, examples) -> AsyncGenerator`
   - Determines 3 task-appropriate angles based on task type:
     ```python
@@ -270,28 +270,28 @@ Generate 3 drafts in different angles, streaming all simultaneously over WebSock
   - Each call gets: interview material, style examples from `inspo/`, angle-specific instructions
   - Streams chunks as `draft.chunk` messages, sends `draft.start` before and `draft.complete` after
   - Uses `asyncio.gather()` to run all 3 concurrently
-- [ ] Create draft prompt template in `backend/src/proof_editor/drafting/prompts.py`
+- [x] Create draft prompt template in `backend/src/proof_editor/drafting/prompts.py`
   - Includes: interview summary, key material, style examples, angle instruction, Every Write Style Guide rules
   - Target: 300-500 words per draft (configurable)
-- [ ] Wire into orchestrator: when `ready_to_draft` fires → start 3 draft streams
-- [ ] Write tests: `tests/test_generator.py`
+- [x] Wire into orchestrator: when `ready_to_draft` fires → start 3 draft streams
+- [x] Write tests: `tests/test_generator.py`
   - Test angle selection by task type
   - Test concurrent streaming (mock LiteLLM responses)
 
 **Frontend tasks:**
 
-- [ ] Create `frontend/src/lib/components/DraftPanel.svelte`
+- [x] Create `frontend/src/lib/components/DraftPanel.svelte`
   - TipTap editor instance (read-only during streaming, editable after)
   - Header: angle label + word count (updates as chunks arrive)
   - Expand button: click to view full-width
   - Content streams in as `draft.chunk` messages arrive
   - Loading state: skeleton/shimmer while waiting for `draft.start`
-- [ ] Create `frontend/src/lib/components/DraftComparison.svelte`
+- [x] Create `frontend/src/lib/components/DraftComparison.svelte`
   - 3-column layout with `DraftPanel` instances
   - Responsive: side-by-side on desktop
   - Shows progress indicators while streaming
   - Transition from interview screen when first `draft.start` arrives
-- [ ] Create `frontend/src/lib/stores/drafts.svelte.ts`
+- [x] Create `frontend/src/lib/stores/drafts.svelte.ts`
   - Stores 3 draft objects: `{title, angle, content, wordCount, streaming, complete}`
   - Updates on `draft.start`, `draft.chunk`, `draft.complete` messages
 
