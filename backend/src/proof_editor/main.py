@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup and shutdown events."""
+    from pathlib import Path
+
+    from dotenv import load_dotenv
+
+    # Load .env in worker process (main() only runs in reloader parent)
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+    load_dotenv(env_path)
+
     logging.basicConfig(level=logging.INFO, force=True)
     create_tables()
     logger.info("Database tables created")

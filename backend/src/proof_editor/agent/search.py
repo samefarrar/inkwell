@@ -32,7 +32,7 @@ class DDGSearchProvider:
     """DuckDuckGo search — no API key required."""
 
     async def search(self, query: str) -> list[SearchResult]:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         try:
             results = DDGS().text(query, max_results=5)
