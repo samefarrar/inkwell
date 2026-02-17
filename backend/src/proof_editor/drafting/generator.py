@@ -86,7 +86,7 @@ class DraftGenerator:
             from litellm import acompletion
 
             response = await acompletion(
-                model="anthropic/claude-sonnet-4-20250514",
+                model="anthropic/claude-sonnet-4-6",
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": "Write the draft now."},

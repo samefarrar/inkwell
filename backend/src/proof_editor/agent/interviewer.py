@@ -230,7 +230,7 @@ class Interviewer:
             from litellm import acompletion
 
             kwargs: dict[str, Any] = {
-                "model": "anthropic/claude-sonnet-4-20250514",
+                "model": "anthropic/claude-sonnet-4-6",
                 "messages": self.messages,
                 "tools": self.tools,
                 "tool_choice": "auto",
