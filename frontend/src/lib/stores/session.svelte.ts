@@ -11,10 +11,16 @@ export interface ThoughtBlock {
   sufficient: boolean;
 }
 
+export interface SearchInfo {
+  query: string;
+  summary: string;
+}
+
 export interface ChatMessage {
-  role: 'user' | 'ai' | 'thought' | 'status';
+  role: 'user' | 'ai' | 'thought' | 'status' | 'search';
   content: string;
   thought?: ThoughtBlock;
+  search?: SearchInfo;
 }
 
 class SessionStore {

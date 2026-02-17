@@ -1,6 +1,7 @@
 /**
  * WebSocket client — connects to the backend and handles typed messages.
  * Auto-reconnects with exponential backoff.
+ * Supports provider query param for search experiments.
  */
 
 export type ServerMessage =
@@ -30,15 +31,20 @@ export type ClientMessage =
 
 type MessageHandler = (msg: ServerMessage) => void;
 
-const WS_URL = 'ws://localhost:8000/ws';
+const BASE_WS_URL = 'ws://localhost:8000/ws';
 const MAX_RECONNECT_DELAY = 30000;
 
-class WebSocketClient {
+export class WebSocketClient {
   private ws: WebSocket | null = null;
   private handlers: Set<MessageHandler> = new Set();
   private reconnectDelay = 1000;
   private shouldReconnect = true;
   private _connected = $state(false);
+  private url: string;
+
+  constructor(provider?: string) {
+    this.url = provider ? `${BASE_WS_URL}?provider=${provider}` : BASE_WS_URL;
+  }
 
   get connected(): boolean {
     return this._connected;
@@ -47,12 +53,12 @@ class WebSocketClient {
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    this.ws = new WebSocket(WS_URL);
+    this.ws = new WebSocket(this.url);
 
     this.ws.onopen = () => {
       this._connected = true;
       this.reconnectDelay = 1000;
-      console.log('[WS] Connected');
+      console.log(`[WS] Connected to ${this.url}`);
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
@@ -97,4 +103,5 @@ class WebSocketClient {
   }
 }
 
+/** Default client (no provider — uses Anthropic by default) */
 export const ws = new WebSocketClient();

@@ -47,7 +47,7 @@ class InterviewQuestion(BaseModel):
     context: str
 
 
-class SearchResult(BaseModel):
+class SearchResultMessage(BaseModel):
     type: Literal["search.result"] = "search.result"
     query: str
     summary: str
@@ -101,7 +101,7 @@ ClientMessage = TaskSelect | InterviewAnswer | DraftHighlight | DraftSynthesize
 ServerMessage = (
     ThoughtMessage
     | InterviewQuestion
-    | SearchResult
+    | SearchResultMessage
     | ReadyToDraft
     | DraftStart
     | DraftChunk

@@ -68,6 +68,14 @@
             {/if}
           </details>
         </div>
+      {:else if msg.role === 'search' && msg.search}
+        <div class="search-card">
+          <div class="search-header">
+            <span class="search-icon">&#x1F50D;</span>
+            <span class="search-query">{msg.search.query}</span>
+          </div>
+          <p class="search-summary">{msg.search.summary}</p>
+        </div>
       {:else if msg.role === 'status'}
         <div class="status-msg">{msg.content}</div>
       {:else if msg.role === 'ai'}
@@ -260,6 +268,43 @@
     font-size: 12px;
     font-weight: 600;
     margin-top: 4px;
+  }
+
+  /* Search result card */
+  .search-card {
+    background: rgba(232, 115, 58, 0.08);
+    border: 1px solid rgba(232, 115, 58, 0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+
+  .search-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .search-icon {
+    font-size: 14px;
+  }
+
+  .search-query {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .search-summary {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--chrome-text-muted);
+    margin: 0;
+    max-height: 120px;
+    overflow-y: auto;
+    white-space: pre-wrap;
   }
 
   /* Status */
