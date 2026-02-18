@@ -5,6 +5,7 @@
   import { drafts } from '$lib/stores/drafts.svelte';
   import { StreamBuffer } from '$lib/stream-buffer.svelte';
   import { BASE_API_URL } from '$lib/config';
+  import Sidebar from '$lib/components/Sidebar.svelte';
   import TaskSelector from '$lib/components/TaskSelector.svelte';
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
@@ -47,13 +48,14 @@
       // Set session metadata
       session.taskType = data.task_type ?? '';
       session.topic = data.topic ?? '';
+      session.currentSessionId = data.session_id;
+      session.appView = 'session';
 
       // Determine max round from rounds keys
       const roundKeys = Object.keys(data.rounds ?? {}).map(Number);
       const maxRound = roundKeys.length > 0 ? Math.max(...roundKeys) : 0;
 
       if (roundKeys.length > 0) {
-        // Load with round navigation
         drafts.loadFromSessionWithRounds(
           data.rounds,
           data.highlights ?? [],
@@ -61,7 +63,6 @@
         );
         session.screen = 'drafts';
       } else {
-        // No drafts yet — resume at interview
         session.screen = 'interview';
       }
 
@@ -70,6 +71,12 @@
     } catch {
       // Silently fail
     }
+  }
+
+  function handleNewSession() {
+    session.reset();
+    session.appView = 'session';
+    drafts.reset();
   }
 
   onMount(() => {
@@ -87,7 +94,6 @@
               sufficient: msg.sufficient
             }
           });
-          // Stream the assessment into thought.assessment, mirror to content
           const tBuf = new StreamBuffer(thoughtMsg.thought!, 'assessment', () => {
             thoughtMsg.content = thoughtMsg.thought!.assessment;
           });
@@ -142,7 +148,6 @@
           break;
 
         case 'error':
-          // If synthesis was in progress, reset the loading state
           if (drafts.synthesizing) {
             drafts.synthesizing = false;
           }
@@ -171,49 +176,64 @@
 </script>
 
 <svelte:head>
-  <title>Proof Editor</title>
+  <title>Inkwell</title>
 </svelte:head>
 
 <div class="app">
-  <nav class="topbar">
-    <div class="nav-left">
-      <span class="logo">Proof</span>
-      <span class="connection-dot" class:connected={ws.connected}></span>
-    </div>
-    <div class="breadcrumb">
-      {#each steps as step, i}
-        {#if i > 0}
-          <span class="crumb-sep">›</span>
-        {/if}
-        <span
-          class="crumb"
-          class:past={(screenOrder[session.screen] ?? 0) > i}
-          class:current={session.screen === step}
-          class:future={(screenOrder[session.screen] ?? 0) < i}
-        >
-          {stepLabels[step]}
-        </span>
-      {/each}
-    </div>
-  </nav>
+  <Sidebar onResume={resumeSession} onNewSession={handleNewSession} />
 
-  <main>
-    {#key session.screen}
-      <div class="screen">
-        {#if session.screen === 'task'}
-          <TaskSelector onResume={resumeSession} />
-        {:else if session.screen === 'interview'}
-          <Interview />
-        {:else if session.screen === 'drafts'}
-          <DraftComparison />
-        {:else if session.screen === 'focus'}
-          <div class="placeholder">
-            <p>Focus editing mode coming soon.</p>
-          </div>
-        {/if}
+  <div class="main-area">
+    <nav class="topbar">
+      <div class="nav-left">
+        <span class="connection-dot" class:connected={ws.connected}></span>
       </div>
-    {/key}
-  </main>
+      {#if session.appView === 'session'}
+        <div class="breadcrumb">
+          {#each steps as step, i}
+            {#if i > 0}
+              <span class="crumb-sep">›</span>
+            {/if}
+            <span
+              class="crumb"
+              class:past={(screenOrder[session.screen] ?? 0) > i}
+              class:current={session.screen === step}
+              class:future={(screenOrder[session.screen] ?? 0) < i}
+            >
+              {stepLabels[step]}
+            </span>
+          {/each}
+        </div>
+      {/if}
+    </nav>
+
+    <main>
+      {#if session.appView === 'session'}
+        {#key session.screen}
+          <div class="screen">
+            {#if session.screen === 'task'}
+              <TaskSelector onResume={resumeSession} />
+            {:else if session.screen === 'interview'}
+              <Interview />
+            {:else if session.screen === 'drafts'}
+              <DraftComparison />
+            {:else if session.screen === 'focus'}
+              <div class="placeholder">
+                <p>Focus editing mode coming soon.</p>
+              </div>
+            {/if}
+          </div>
+        {/key}
+      {:else if session.appView === 'styles'}
+        <div class="placeholder">
+          <p>Style management coming soon.</p>
+        </div>
+      {:else if session.appView === 'style_editor'}
+        <div class="placeholder">
+          <p>Style editor coming soon.</p>
+        </div>
+      {/if}
+    </main>
+  </div>
 </div>
 
 <style>
@@ -262,10 +282,17 @@
   .app {
     min-height: 100vh;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
   }
 
-  /* Nav bar */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* Nav bar — now inside main-area, not above sidebar */
   .topbar {
     display: flex;
     align-items: center;
@@ -281,14 +308,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .logo {
-    font-family: 'Outfit', sans-serif;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--chrome-text);
-    letter-spacing: 0.02em;
   }
 
   .connection-dot {

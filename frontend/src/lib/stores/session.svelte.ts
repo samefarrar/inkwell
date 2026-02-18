@@ -4,6 +4,17 @@
  */
 
 export type Screen = 'task' | 'interview' | 'drafts' | 'focus';
+export type AppView = 'session' | 'styles' | 'style_editor';
+
+export interface SessionSummary {
+  id: number;
+  task_type: string;
+  topic: string;
+  status: string;
+  draft_count: number;
+  max_round: number;
+  created_at: string;
+}
 
 export interface ThoughtBlock {
   assessment: string;
@@ -25,6 +36,10 @@ export interface ChatMessage {
 
 class SessionStore {
   screen = $state<Screen>('task');
+  appView = $state<AppView>('session');
+  currentSessionId = $state<number | null>(null);
+  sessionList = $state<SessionSummary[]>([]);
+  sessionsLoading = $state(false);
   taskType = $state('');
   topic = $state('');
   messages = $state<ChatMessage[]>([]);
@@ -68,6 +83,24 @@ class SessionStore {
     this.readyToDraft = false;
     this.draftSummary = '';
     this.keyMaterial = [];
+    this.currentSessionId = null;
+  }
+
+  setAppView(view: AppView): void {
+    this.appView = view;
+  }
+
+  async loadSessions(): Promise<void> {
+    const { BASE_API_URL } = await import('$lib/config');
+    this.sessionsLoading = true;
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/sessions`);
+      this.sessionList = await res.json();
+    } catch {
+      // Silently fail
+    } finally {
+      this.sessionsLoading = false;
+    }
   }
 }
 
