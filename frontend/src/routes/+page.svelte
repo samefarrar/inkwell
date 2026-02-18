@@ -8,55 +8,71 @@
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
 
-  interface LatestSession {
-    found: boolean;
-    session_id?: number;
-    task_type?: string;
-    topic?: string;
-    synthesis_round?: number;
-    drafts?: { title: string; angle: string; content: string; word_count: number }[];
-    highlights?: {
-      draft_index: number;
-      start: number;
-      end: number;
-      sentiment: 'like' | 'flag';
-      label?: string;
-      note?: string;
-    }[];
-  }
-
   let unsubscribe: (() => void) | undefined;
   let activeBuffers: StreamBuffer[] = [];
-  let latestSession = $state<LatestSession | null>(null);
 
-  function resumeSession(data: LatestSession) {
-    if (!data.found || !data.session_id || !data.drafts?.length) return;
+  async function resumeSession(sessionId: number) {
+    try {
+      const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}`);
+      const data = await res.json();
+      if (!data.found) return;
 
-    // Populate drafts store
-    drafts.loadFromSession(data.drafts, data.highlights ?? [], data.synthesis_round ?? 0);
+      // Parse interview messages into ChatMessages
+      if (data.interview_messages?.length) {
+        const msgs = data.interview_messages.map((m: {
+          role: string;
+          content: string;
+          thought_json?: string | null;
+          search_json?: string | null;
+          ready_json?: string | null;
+        }) => {
+          const msg: import('$lib/stores/session.svelte').ChatMessage = {
+            role: m.role as 'user' | 'ai' | 'thought' | 'status' | 'search',
+            content: m.content
+          };
+          if (m.thought_json) {
+            const t = JSON.parse(m.thought_json);
+            msg.thought = { assessment: t.assessment, missing: t.missing ?? [], sufficient: t.sufficient ?? false };
+          }
+          if (m.search_json) {
+            const s = JSON.parse(m.search_json);
+            msg.search = { query: s.query, summary: s.summary };
+          }
+          return msg;
+        });
+        session.messages = msgs;
+      }
 
-    // Set session metadata and switch screen
-    session.taskType = data.task_type ?? '';
-    session.topic = data.topic ?? '';
-    session.screen = 'drafts';
+      // Set session metadata
+      session.taskType = data.task_type ?? '';
+      session.topic = data.topic ?? '';
 
-    // Tell backend to hydrate its orchestrator
-    ws.send({ type: 'session.resume', session_id: data.session_id });
+      // Determine max round from rounds keys
+      const roundKeys = Object.keys(data.rounds ?? {}).map(Number);
+      const maxRound = roundKeys.length > 0 ? Math.max(...roundKeys) : 0;
 
-    // Clear the resume prompt
-    latestSession = null;
+      if (roundKeys.length > 0) {
+        // Load with round navigation
+        drafts.loadFromSessionWithRounds(
+          data.rounds,
+          data.highlights ?? [],
+          maxRound
+        );
+        session.screen = 'drafts';
+      } else {
+        // No drafts yet — resume at interview
+        session.screen = 'interview';
+      }
+
+      // Tell backend to hydrate its orchestrator
+      ws.send({ type: 'session.resume', session_id: data.session_id });
+    } catch {
+      // Silently fail
+    }
   }
 
   onMount(() => {
     ws.connect();
-
-    // Fetch latest session for resume button
-    fetch('http://localhost:8000/api/sessions/latest')
-      .then((r) => r.json())
-      .then((data: LatestSession) => {
-        if (data.found) latestSession = data;
-      })
-      .catch(() => {});
 
     unsubscribe = ws.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
@@ -184,7 +200,7 @@
     {#key session.screen}
       <div class="screen">
         {#if session.screen === 'task'}
-          <TaskSelector {latestSession} onResume={resumeSession} />
+          <TaskSelector onResume={resumeSession} />
         {:else if session.screen === 'interview'}
           <Interview />
         {:else if session.screen === 'drafts'}

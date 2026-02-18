@@ -60,6 +60,132 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/sessions")
+async def list_sessions() -> list[dict[str, Any]]:
+    """Return all sessions with summary metadata, newest first."""
+    from sqlmodel import func, select
+
+    from proof_editor.db import get_session
+    from proof_editor.models.draft import Draft
+    from proof_editor.models.session import Session
+
+    with get_session() as db:
+        sessions = db.exec(
+            select(Session).order_by(Session.created_at.desc())  # type: ignore[union-attr]
+        ).all()
+
+        result = []
+        for sess in sessions:
+            # Count drafts and find max round
+            draft_count_stmt = select(func.count()).where(Draft.session_id == sess.id)
+            draft_count = db.exec(draft_count_stmt).one()
+
+            max_round_stmt = select(func.max(Draft.round)).where(
+                Draft.session_id == sess.id
+            )
+            max_round = db.exec(max_round_stmt).one() or 0
+
+            result.append(
+                {
+                    "id": sess.id,
+                    "task_type": sess.task_type,
+                    "topic": sess.topic,
+                    "status": sess.status,
+                    "draft_count": draft_count,
+                    "max_round": max_round,
+                    "created_at": sess.created_at.isoformat(),
+                }
+            )
+
+        return result
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session_detail(session_id: int) -> dict[str, Any]:
+    """Return full session detail: interview + drafts by round + highlights."""
+    from sqlmodel import select
+
+    from proof_editor.db import get_session
+    from proof_editor.models.draft import Draft
+    from proof_editor.models.highlight import Highlight
+    from proof_editor.models.interview_message import InterviewMessage
+    from proof_editor.models.session import Session
+
+    with get_session() as db:
+        sess = db.get(Session, session_id)
+        if not sess:
+            return {"found": False}
+
+        # Interview messages
+        im_stmt = (
+            select(InterviewMessage)
+            .where(InterviewMessage.session_id == session_id)
+            .order_by(InterviewMessage.ordering)
+        )
+        interview_msgs = db.exec(im_stmt).all()
+
+        # All drafts grouped by round
+        draft_stmt = (
+            select(Draft)
+            .where(Draft.session_id == session_id)
+            .order_by(Draft.round, Draft.draft_index)
+        )
+        db_drafts = db.exec(draft_stmt).all()
+
+        rounds: dict[int, list[dict[str, Any]]] = {}
+        for d in db_drafts:
+            rounds.setdefault(d.round, []).append(
+                {
+                    "title": d.title,
+                    "angle": d.angle,
+                    "content": d.content,
+                    "word_count": d.word_count,
+                    "draft_index": d.draft_index,
+                }
+            )
+
+        # Highlights
+        hl_stmt = (
+            select(Highlight)
+            .where(Highlight.session_id == session_id)
+            .order_by(Highlight.id)
+        )
+        db_highlights = db.exec(hl_stmt).all()
+
+        return {
+            "found": True,
+            "session_id": sess.id,
+            "task_type": sess.task_type,
+            "topic": sess.topic,
+            "status": sess.status,
+            "created_at": sess.created_at.isoformat(),
+            "interview_messages": [
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    "thought_json": m.thought_json,
+                    "search_json": m.search_json,
+                    "ready_json": m.ready_json,
+                    "ordering": m.ordering,
+                }
+                for m in interview_msgs
+            ],
+            "rounds": {str(k): v for k, v in sorted(rounds.items())},
+            "highlights": [
+                {
+                    "draft_index": h.draft_index,
+                    "start": h.start,
+                    "end": h.end,
+                    "text": h.text,
+                    "sentiment": h.sentiment,
+                    "label": h.label,
+                    "note": h.note,
+                }
+                for h in db_highlights
+            ],
+        }
+
+
 @app.get("/api/sessions/latest")
 async def latest_session() -> dict[str, Any]:
     """Return the most recent session that has drafts."""

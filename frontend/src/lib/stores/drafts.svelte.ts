@@ -40,6 +40,8 @@ class DraftsStore {
 	drafts = $state<Draft[]>([createEmptyDraft(), createEmptyDraft(), createEmptyDraft()]);
 	synthesisRound = $state(0);
 	synthesizing = $state(false);
+	allRounds = $state<Record<string, { title: string; angle: string; content: string; word_count: number }[]>>({});
+	viewingRound = $state<number | null>(null);
 	private buffers: (StreamBuffer | null)[] = [null, null, null];
 
 	addHighlight(draftIndex: number, highlight: Highlight): void {
@@ -151,6 +153,8 @@ class DraftsStore {
 		this.buffers = [null, null, null];
 		this.synthesisRound = synthesisRound;
 		this.synthesizing = false;
+		this.allRounds = {};
+		this.viewingRound = null;
 
 		this.drafts = sessionDrafts.map((d) => ({
 			title: d.title,
@@ -180,12 +184,77 @@ class DraftsStore {
 		}
 	}
 
+	loadFromSessionWithRounds(
+		rounds: Record<string, { title: string; angle: string; content: string; word_count: number }[]>,
+		sessionHighlights: {
+			draft_index: number;
+			start: number;
+			end: number;
+			sentiment: 'like' | 'flag';
+			label?: string;
+			note?: string;
+		}[],
+		synthesisRound: number
+	): void {
+		this.allRounds = rounds;
+		const latestRoundKey = String(synthesisRound);
+		const latestDrafts = rounds[latestRoundKey] ?? [];
+		this.loadFromSession(latestDrafts, sessionHighlights, synthesisRound);
+		this.viewingRound = null;
+	}
+
+	viewRound(roundNum: number): void {
+		const key = String(roundNum);
+		const roundDrafts = this.allRounds[key];
+		if (!roundDrafts) return;
+
+		this.buffers.forEach((b) => b?.destroy());
+		this.buffers = [null, null, null];
+
+		this.viewingRound = roundNum;
+		this.drafts = roundDrafts.map((d) => ({
+			title: d.title,
+			angle: d.angle,
+			content: d.content,
+			wordCount: d.word_count,
+			streaming: false,
+			complete: true,
+			highlights: []
+		}));
+	}
+
+	viewLatestRound(): void {
+		const latestDrafts = this.allRounds[String(this.synthesisRound)];
+		if (!latestDrafts) return;
+
+		this.viewingRound = null;
+		this.drafts = latestDrafts.map((d) => ({
+			title: d.title,
+			angle: d.angle,
+			content: d.content,
+			wordCount: d.word_count,
+			streaming: false,
+			complete: true,
+			highlights: []
+		}));
+	}
+
+	get isViewingHistory(): boolean {
+		return this.viewingRound !== null;
+	}
+
+	get roundCount(): number {
+		return Object.keys(this.allRounds).length;
+	}
+
 	reset(): void {
 		this.buffers.forEach((b) => b?.destroy());
 		this.buffers = [null, null, null];
 		this.drafts = [createEmptyDraft(), createEmptyDraft(), createEmptyDraft()];
 		this.synthesisRound = 0;
 		this.synthesizing = false;
+		this.allRounds = {};
+		this.viewingRound = null;
 	}
 }
 

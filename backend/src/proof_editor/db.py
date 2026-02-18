@@ -18,6 +18,7 @@ def create_tables() -> None:
         draft,
         feedback,
         highlight,
+        interview_message,
         preference,
         session,
     )

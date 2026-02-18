@@ -7,6 +7,7 @@ providers (Anthropic built-in, DDG, Exa).
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import WebSocket
@@ -165,17 +166,22 @@ class Interviewer:
     - 'ddg'/'exa': explicit search_web tool call with provider
     """
 
+    # Callback signature: (role, content, **kwargs) -> None
+    OnMessageCallback = Callable[..., None]
+
     def __init__(
         self,
         task_type: str,
         topic: str,
         websocket: WebSocket,
         search_provider: SearchProvider | None = None,
+        on_message: OnMessageCallback | None = None,
     ) -> None:
         self.task_type = task_type
         self.topic = topic
         self.ws = websocket
         self.search_provider = search_provider
+        self.on_message = on_message
         self.messages: list[dict[str, Any]] = []
 
         examples = load_examples()
@@ -268,6 +274,12 @@ class Interviewer:
                 sufficient=args.get("sufficient", False),
             ).model_dump_json()
         )
+        if self.on_message:
+            self.on_message(
+                "thought",
+                args["assessment"],
+                thought_json=json.dumps(args),
+            )
         self.messages.append(
             {
                 "role": "tool",
@@ -283,6 +295,8 @@ class Interviewer:
                 context=args.get("context", ""),
             ).model_dump_json()
         )
+        if self.on_message:
+            self.on_message("ai", args["question"])
         self.messages.append(
             {
                 "role": "tool",
@@ -301,6 +315,12 @@ class Interviewer:
                 key_material=key_material,
             ).model_dump_json()
         )
+        if self.on_message:
+            self.on_message(
+                "ready_to_draft",
+                summary,
+                ready_json=json.dumps(args),
+            )
         self.messages.append(
             {
                 "role": "tool",
@@ -341,6 +361,12 @@ class Interviewer:
                 summary=summary,
             ).model_dump_json()
         )
+        if self.on_message:
+            self.on_message(
+                "search",
+                summary,
+                search_json=json.dumps({"query": query, "summary": summary}),
+            )
 
         # Inject results back into conversation as tool response
         self.messages.append(

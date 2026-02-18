@@ -1,27 +1,20 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
 
-  interface LatestSession {
-    found: boolean;
-    session_id?: number;
-    task_type?: string;
-    topic?: string;
-    synthesis_round?: number;
-    drafts?: { title: string; angle: string; content: string; word_count: number }[];
-    highlights?: {
-      draft_index: number;
-      start: number;
-      end: number;
-      sentiment: 'like' | 'flag';
-      label?: string;
-      note?: string;
-    }[];
+  interface SessionSummary {
+    id: number;
+    task_type: string;
+    topic: string;
+    status: string;
+    draft_count: number;
+    max_round: number;
+    created_at: string;
   }
 
-  let { latestSession = null, onResume }: {
-    latestSession: LatestSession | null;
-    onResume: (data: LatestSession) => void;
+  let { onResume }: {
+    onResume: (sessionId: number) => void;
   } = $props();
 
   const taskTypes = [
@@ -34,12 +27,44 @@
 
   let selectedType = $state('essay');
   let topic = $state('');
+  let sessions = $state<SessionSummary[]>([]);
+
+  onMount(() => {
+    fetch('http://localhost:8000/api/sessions')
+      .then((r) => r.json())
+      .then((data: SessionSummary[]) => {
+        sessions = data;
+      })
+      .catch(() => {});
+  });
 
   function startInterview() {
     if (!topic.trim()) return;
     session.startInterview(selectedType, topic.trim());
     ws.send({ type: 'task.select', task_type: selectedType, topic: topic.trim() });
   }
+
+  function relativeDate(iso: string): string {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return d.toLocaleDateString();
+  }
+
+  const taskTypeLabels: Record<string, string> = {
+    essay: 'Essay',
+    review: 'Review',
+    newsletter: 'Newsletter',
+    landing_page: 'Landing Page',
+    blog_post: 'Blog Post'
+  };
 </script>
 
 <div class="task-selector">
@@ -80,20 +105,29 @@
     Start Interview
   </button>
 
-  {#if latestSession?.found}
-    <button
-      class="resume-link anim"
-      style="animation-delay: 400ms"
-      onclick={() => onResume(latestSession!)}
-    >
-      Resume last session: {latestSession.topic}
-      <span class="resume-meta">
-        {latestSession.drafts?.length ?? 0} drafts
-        {#if (latestSession.synthesis_round ?? 0) > 0}
-          &middot; round {latestSession.synthesis_round}
-        {/if}
-      </span>
-    </button>
+  {#if sessions.length > 0}
+    <div class="sessions-section anim" style="animation-delay: 400ms">
+      <h3 class="sessions-heading">Past sessions</h3>
+      <div class="sessions-list">
+        {#each sessions as s}
+          <button class="session-card" onclick={() => onResume(s.id)}>
+            <span class="session-topic">{s.topic}</span>
+            <span class="session-meta">
+              <span class="type-pill">{taskTypeLabels[s.task_type] ?? s.task_type}</span>
+              {#if s.draft_count > 0}
+                {s.draft_count} draft{s.draft_count === 1 ? '' : 's'}
+              {:else}
+                interview
+              {/if}
+              {#if s.max_round > 0}
+                &middot; round {s.max_round}
+              {/if}
+              &middot; {relativeDate(s.created_at)}
+            </span>
+          </button>
+        {/each}
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -235,33 +269,73 @@
     50% { box-shadow: 0 0 20px var(--accent-glow); }
   }
 
-  /* Resume link */
-  .resume-link {
-    margin-top: 16px;
-    padding: 12px 20px;
+  /* Sessions list */
+  .sessions-section {
+    margin-top: 32px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .sessions-heading {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--chrome-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px;
+  }
+
+  .sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .session-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 16px;
     background: transparent;
     border: 1px solid var(--chrome-border);
     border-radius: 10px;
-    color: var(--chrome-text-muted);
+    color: var(--chrome-text);
     font-family: 'Outfit', sans-serif;
     font-size: 14px;
     cursor: pointer;
-    transition: color 0.2s, border-color 0.2s;
-    max-width: 480px;
-    width: 100%;
-    text-align: center;
+    text-align: left;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
   }
 
-  .resume-link:hover {
-    color: var(--chrome-text);
+  .session-card:hover {
     border-color: var(--accent);
+    background: rgba(232, 115, 58, 0.04);
   }
 
-  .resume-meta {
-    display: block;
+  .session-topic {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .session-meta {
     font-size: 12px;
     color: var(--chrome-text-muted);
-    margin-top: 2px;
-    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .type-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--chrome-surface);
+    font-size: 11px;
+    font-weight: 500;
   }
 </style>

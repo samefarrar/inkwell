@@ -37,6 +37,7 @@ class Orchestrator:
         self.interview_summary: str = ""
         self.key_material: list[str] = []
         self.synthesis_round: int = 0
+        self._interview_msg_counter: int = 0
 
         # These get initialized lazily to avoid import-time LLM setup
         self._interviewer: Any = None
@@ -45,6 +46,37 @@ class Orchestrator:
     async def send(self, msg: Any) -> None:
         """Send a typed message over WebSocket."""
         await self.ws.send_text(msg.model_dump_json())
+
+    def _save_interview_message(
+        self,
+        role: str,
+        content: str,
+        *,
+        thought_json: str | None = None,
+        search_json: str | None = None,
+        ready_json: str | None = None,
+    ) -> None:
+        """Persist an interview message to the database."""
+        if not self.session_id:
+            return
+
+        from proof_editor.db import get_session
+        from proof_editor.models.interview_message import InterviewMessage
+
+        with get_session() as db:
+            msg = InterviewMessage(
+                session_id=self.session_id,
+                role=role,
+                content=content,
+                thought_json=thought_json,
+                search_json=search_json,
+                ready_json=ready_json,
+                ordering=self._interview_msg_counter,
+            )
+            db.add(msg)
+            db.commit()
+
+        self._interview_msg_counter += 1
 
     async def handle_task_select(self, msg: TaskSelect) -> None:
         """Handle task selection — create session and start interview."""
@@ -74,12 +106,14 @@ class Orchestrator:
             self.session_id = session.id
 
         self.state = "interview"
+        self._interview_msg_counter = 0
         search_provider = create_search_provider()
         self._interviewer = Interviewer(
             task_type=self.task_type,
             topic=self.topic,
             websocket=self.ws,
             search_provider=search_provider,
+            on_message=self._save_interview_message,
         )
 
         await self.send(
@@ -99,6 +133,9 @@ class Orchestrator:
         if not self._interviewer:
             await self.send(ErrorMessage(message="No active interview"))
             return
+
+        # Save user's answer before processing
+        self._save_interview_message("user", msg.answer)
 
         result = await self._interviewer.process_answer(msg.answer)
 
@@ -351,11 +388,12 @@ class Orchestrator:
         """Hydrate orchestrator state from a persisted session."""
         import json as _json
 
-        from sqlmodel import select
+        from sqlmodel import func, select
 
         from proof_editor.db import get_session as _get_db
         from proof_editor.models.draft import Draft
         from proof_editor.models.highlight import Highlight
+        from proof_editor.models.interview_message import InterviewMessage
         from proof_editor.models.session import Session as _Session
 
         with _get_db() as db:
@@ -371,6 +409,12 @@ class Orchestrator:
             self.key_material = (
                 _json.loads(sess.key_material) if sess.key_material else []
             )
+
+            # Restore interview message counter
+            count_stmt = select(func.count()).where(
+                InterviewMessage.session_id == session_id
+            )
+            self._interview_msg_counter = db.exec(count_stmt).one()
 
             # Load latest-round drafts
             max_round_stmt = (

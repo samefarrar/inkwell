@@ -61,19 +61,29 @@
       ? `Round ${drafts.synthesisRound + 1}`
       : ''
   );
+
+  let roundNumbers = $derived(
+    Object.keys(drafts.allRounds).map(Number).sort((a, b) => a - b)
+  );
+
+  let transcriptOpen = $state(false);
 </script>
 
 <div class="draft-comparison">
   <div class="header">
     <h2>
-      {#if drafts.synthesisRound > 0}
+      {#if drafts.isViewingHistory}
+        Round {(drafts.viewingRound ?? 0) + 1} (read-only)
+      {:else if drafts.synthesisRound > 0}
         Refined drafts {roundLabel}
       {:else}
         Three angles on your {session.taskType}
       {/if}
     </h2>
     <p class="subtitle">
-      {#if drafts.synthesizing}
+      {#if drafts.isViewingHistory}
+        Viewing historical round. Switch to latest to edit.
+      {:else if drafts.synthesizing}
         Synthesizing new drafts from your feedback...
       {:else if drafts.allComplete}
         Select text to highlight, edit directly, or focus on a draft.
@@ -83,21 +93,72 @@
     </p>
   </div>
 
+  {#if roundNumbers.length > 1}
+    <div class="round-tabs">
+      {#each roundNumbers as rn}
+        <button
+          class="round-tab"
+          class:active={drafts.isViewingHistory ? drafts.viewingRound === rn : rn === drafts.synthesisRound}
+          onclick={() => {
+            if (rn === drafts.synthesisRound) {
+              drafts.viewLatestRound();
+            } else {
+              drafts.viewRound(rn);
+            }
+          }}
+        >
+          {rn === 0 ? 'Original' : `Round ${rn + 1}`}
+          {#if rn === drafts.synthesisRound}
+            <span class="latest-badge">latest</span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
+
+  {#if session.messages.length > 0}
+    <details class="transcript" bind:open={transcriptOpen}>
+      <summary class="transcript-toggle">
+        Interview transcript ({session.messages.filter(m => m.role === 'user' || m.role === 'ai').length} messages)
+      </summary>
+      <div class="transcript-body">
+        {#each session.messages as msg}
+          {#if msg.role === 'ai'}
+            <div class="transcript-msg transcript-ai">
+              <span class="transcript-label">AI</span>
+              <p>{msg.content}</p>
+            </div>
+          {:else if msg.role === 'user'}
+            <div class="transcript-msg transcript-user">
+              <span class="transcript-label">You</span>
+              <p>{msg.content}</p>
+            </div>
+          {:else if msg.role === 'thought' && msg.thought}
+            <div class="transcript-msg transcript-thought">
+              <span class="transcript-label">Thought</span>
+              <p class="thought-text">{msg.thought.assessment}</p>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </details>
+  {/if}
+
   <div class="panels">
     {#each drafts.drafts as draft, i}
       <DraftPanel
         {draft}
         index={i}
-        onhighlight={(data) => handleHighlight(i, data)}
-        onremove={(hlIdx) => handleRemove(i, hlIdx)}
-        onlabelchange={(hlIdx, label) => handleLabelChange(i, hlIdx, label)}
-        onedit={(content) => handleEdit(i, content)}
-        onfocus={() => handleFocus(i)}
+        onhighlight={drafts.isViewingHistory ? undefined : (data) => handleHighlight(i, data)}
+        onremove={drafts.isViewingHistory ? undefined : (hlIdx) => handleRemove(i, hlIdx)}
+        onlabelchange={drafts.isViewingHistory ? undefined : (hlIdx, label) => handleLabelChange(i, hlIdx, label)}
+        onedit={drafts.isViewingHistory ? undefined : (content) => handleEdit(i, content)}
+        onfocus={drafts.isViewingHistory ? undefined : () => handleFocus(i)}
       />
     {/each}
   </div>
 
-  {#if drafts.allComplete && !drafts.synthesizing}
+  {#if drafts.allComplete && !drafts.synthesizing && !drafts.isViewingHistory}
     <div class="actions">
       {#if drafts.totalHighlights > 0}
         <span class="hl-summary">
@@ -156,6 +217,116 @@
     font-size: 14px;
     color: var(--chrome-text-muted);
     margin: 0;
+  }
+
+  /* Round tabs */
+  .round-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .round-tab {
+    padding: 6px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--chrome-border);
+    background: transparent;
+    color: var(--chrome-text-muted);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .round-tab:hover {
+    border-color: var(--chrome-text-muted);
+    color: var(--chrome-text);
+  }
+
+  .round-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .latest-badge {
+    font-size: 10px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* Interview transcript */
+  .transcript {
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .transcript-toggle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: color 0.2s;
+  }
+
+  .transcript-toggle:hover {
+    color: var(--chrome-text);
+  }
+
+  .transcript-body {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--chrome-border);
+    border-radius: 8px;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .transcript-msg {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .transcript-msg p {
+    margin: 2px 0 0;
+    color: var(--chrome-text);
+  }
+
+  .transcript-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .transcript-ai .transcript-label {
+    color: var(--accent);
+  }
+
+  .transcript-user .transcript-label {
+    color: var(--success);
+  }
+
+  .transcript-thought .transcript-label {
+    color: var(--chrome-text-muted);
+  }
+
+  .thought-text {
+    color: var(--chrome-text-muted) !important;
+    font-style: italic;
   }
 
   .panels {
