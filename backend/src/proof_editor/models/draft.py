@@ -7,7 +7,7 @@ from sqlmodel import Field, SQLModel
 
 class Draft(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="session.id")
+    session_id: int = Field(foreign_key="session.id", index=True)
     draft_index: int
     title: str
     angle: str

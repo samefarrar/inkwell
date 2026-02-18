@@ -77,9 +77,6 @@
     goBack();
   }
 
-  function formatWordCount(n: number): string {
-    return n.toLocaleString();
-  }
 </script>
 
 <div class="style-editor">
@@ -184,7 +181,7 @@
                   {sample.title || 'Untitled'}
                 </span>
                 <span class="sample-meta">
-                  {formatWordCount(sample.word_count)} words · {sample.source_type}
+                  {sample.word_count.toLocaleString()} words · {sample.source_type}
                 </span>
               </div>
               <div class="sample-preview">

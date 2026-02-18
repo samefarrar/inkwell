@@ -352,19 +352,4 @@
     50% { opacity: 0.8; }
   }
 
-  @media (max-width: 768px) {
-    .sidebar {
-      position: fixed;
-      left: 0;
-      top: 0;
-      z-index: 100;
-      width: 240px;
-      transform: translateX(0);
-      transition: transform 0.2s ease-out;
-    }
-
-    :global(.sidebar-collapsed) .sidebar {
-      transform: translateX(-100%);
-    }
-  }
 </style>

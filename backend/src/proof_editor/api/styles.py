@@ -29,7 +29,7 @@ class StyleUpdate(BaseModel):
 
 class SampleCreate(BaseModel):
     title: str = Field(default="", max_length=500)
-    content: str
+    content: str = Field(max_length=500_000)
 
 
 @router.get("")
@@ -167,25 +167,25 @@ async def add_sample(style_id: int, body: SampleCreate) -> dict[str, Any]:
 @router.post("/{style_id}/samples/upload")
 async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
     """Upload a document as a style sample (txt, md)."""
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
-
     # Validate extension
     safe_name = PurePosixPath(file.filename or "untitled").name
     ext = PurePosixPath(safe_name).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            400, f"Unsupported file type: {ext}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
+        allowed = ", ".join(ALLOWED_EXTENSIONS)
+        raise HTTPException(400, f"Unsupported file type: {ext}. Allowed: {allowed}")
 
-    # Read with size limit
-    raw_bytes = await file.read()
-    if len(raw_bytes) > MAX_UPLOAD_BYTES:
-        raise HTTPException(400, f"File too large. Max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+    # Read in chunks to enforce size limit without loading oversized files
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(64 * 1024):
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                400, f"File too large. Max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
+            )
+        chunks.append(chunk)
+    raw_bytes = b"".join(chunks)
 
-    # Validate encoding
     try:
         text = raw_bytes.decode("utf-8")
     except UnicodeDecodeError:
@@ -195,6 +195,10 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
     title = PurePosixPath(safe_name).stem
 
     with get_session() as db:
+        style = db.get(WritingStyle, style_id)
+        if not style:
+            raise HTTPException(404, "Style not found")
+
         sample = StyleSample(
             style_id=style_id,
             title=title,

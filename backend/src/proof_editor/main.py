@@ -21,7 +21,7 @@ from proof_editor.ws_types import (
     HighlightRemove,
     HighlightUpdate,
     InterviewAnswer,
-    SessionCancel,
+    SessionResume,
     TaskSelect,
 )
 
@@ -109,11 +109,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 elif msg_type == "draft.synthesize":
                     await orchestrator.handle_synthesize(DraftSynthesize(**data))
                 elif msg_type == "session.resume":
-                    from proof_editor.ws_types import SessionResume
-
                     await orchestrator.handle_resume(SessionResume(**data).session_id)
                 elif msg_type == "session.cancel":
-                    SessionCancel(**data)  # validate
                     await orchestrator.handle_cancel()
                 else:
                     await websocket.send_text(

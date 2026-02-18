@@ -788,10 +788,10 @@ Frontend discards messages where `session_id !== currentSessionId`.
 - StyleEditor: back arrow "Back to Styles"
 
 **Acceptance Criteria:**
-- [ ] WebSocket origin validation on all connections
-- [ ] WS messages tagged with session_id, stale messages discarded
-- [ ] Rapid session switching debounced
-- [ ] Contextual navigation (breadcrumb only on session screens)
+- [x] WebSocket origin validation on all connections
+- [ ] WS messages tagged with session_id, stale messages discarded (deferred — not MVP-critical)
+- [x] Rapid session switching debounced
+- [x] Contextual navigation (breadcrumb only on session screens)
 
 ---
 

@@ -1,15 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { styles } from '$lib/stores/styles.svelte';
   import { session } from '$lib/stores/session.svelte';
 
   let showCreate = $state(false);
   let newName = $state('');
   let newDesc = $state('');
-
-  onMount(() => {
-    styles.loadStyles();
-  });
 
   async function handleCreate() {
     if (!newName.trim()) return;
