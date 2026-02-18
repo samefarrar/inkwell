@@ -9,6 +9,8 @@
   import TaskSelector from '$lib/components/TaskSelector.svelte';
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
+  import StyleManager from '$lib/components/StyleManager.svelte';
+  import StyleEditor from '$lib/components/StyleEditor.svelte';
 
   let unsubscribe: (() => void) | undefined;
   let activeBuffers: StreamBuffer[] = [];
@@ -224,13 +226,9 @@
           </div>
         {/key}
       {:else if session.appView === 'styles'}
-        <div class="placeholder">
-          <p>Style management coming soon.</p>
-        </div>
+        <StyleManager />
       {:else if session.appView === 'style_editor'}
-        <div class="placeholder">
-          <p>Style editor coming soon.</p>
-        </div>
+        <StyleEditor />
       {/if}
     </main>
   </div>
