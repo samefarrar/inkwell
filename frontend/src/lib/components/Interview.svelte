@@ -3,6 +3,7 @@
   import { session } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
   import { tick } from 'svelte';
+  import VoiceButton from '$lib/components/VoiceButton.svelte';
 
   let input = $state('');
   let messagesEnd: HTMLDivElement;
@@ -108,9 +109,12 @@
         placeholder="Share your thoughts..."
         rows="5"
       ></textarea>
-      <button class="send-btn" onclick={sendAnswer} disabled={!input.trim()}>
-        Send
-      </button>
+      <div class="input-actions">
+        <VoiceButton onTranscript={(text) => (input += (input ? ' ' : '') + text)} />
+        <button class="send-btn" onclick={sendAnswer} disabled={!input.trim()}>
+          Send
+        </button>
+      </div>
     </div>
   {/if}
 </div>
@@ -348,8 +352,14 @@
     border-color: var(--accent);
   }
 
-  .send-btn {
+  .input-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     align-self: flex-end;
+  }
+
+  .send-btn {
     padding: 8px 20px;
     background: var(--accent);
     color: white;

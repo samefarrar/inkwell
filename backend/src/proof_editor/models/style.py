@@ -24,4 +24,5 @@ class StyleSample(SQLModel, table=True):
     content: str
     source_type: str = "paste"  # "upload" | "paste"
     word_count: int = 0
+    gcs_uri: str = Field(default="")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -1,20 +1,44 @@
 """Style management REST endpoints."""
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Any
 
+import pymupdf
 from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlmodel import select
 
 from proof_editor.db import get_session
 from proof_editor.models.style import StyleSample, WritingStyle
+from proof_editor.storage import upload_to_gcs
 
 router = APIRouter(prefix="/api/styles", tags=["styles"])
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
-ALLOWED_EXTENSIONS = {".txt", ".md"}
+MAX_PDF_PAGES = 100
+MAX_PDF_TEXT_BYTES = 1_000_000  # 1 MB text cap
+ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf"}
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    """Extract text from PDF bytes using PyMuPDF. Sync — run via to_thread."""
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    try:
+        if len(doc) > MAX_PDF_PAGES:
+            raise ValueError(f"PDF has {len(doc)} pages, max {MAX_PDF_PAGES}")
+        parts: list[str] = []
+        total_len = 0
+        for page in doc:
+            text = page.get_text(sort=True)
+            total_len += len(text)
+            if total_len > MAX_PDF_TEXT_BYTES:
+                break
+            parts.append(text.strip())
+        return "\n\n".join(p for p in parts if p)
+    finally:
+        doc.close()
 
 
 class StyleCreate(BaseModel):
@@ -166,15 +190,14 @@ async def add_sample(style_id: int, body: SampleCreate) -> dict[str, Any]:
 
 @router.post("/{style_id}/samples/upload")
 async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
-    """Upload a document as a style sample (txt, md)."""
-    # Validate extension
+    """Upload a document as a style sample (txt, md, pdf)."""
     safe_name = PurePosixPath(file.filename or "untitled").name
     ext = PurePosixPath(safe_name).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         allowed = ", ".join(ALLOWED_EXTENSIONS)
         raise HTTPException(400, f"Unsupported file type: {ext}. Allowed: {allowed}")
 
-    # Read in chunks to enforce size limit without loading oversized files
+    # Read in chunks to enforce size limit
     chunks: list[bytes] = []
     total = 0
     while chunk := await file.read(64 * 1024):
@@ -186,10 +209,21 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
         chunks.append(chunk)
     raw_bytes = b"".join(chunks)
 
-    try:
-        text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(400, "File must be valid UTF-8 text")
+    # Extract text — PDF uses PyMuPDF, others decode as UTF-8
+    if ext == ".pdf":
+        try:
+            text = await asyncio.to_thread(_extract_pdf_text, raw_bytes)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    else:
+        try:
+            text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(400, "File must be valid UTF-8 text")
+
+    # Upload original to GCS (returns None if GCS not configured)
+    content_type = file.content_type or "application/octet-stream"
+    gcs_uri = upload_to_gcs(raw_bytes, style_id, safe_name, content_type)
 
     word_count = len(text.split())
     title = PurePosixPath(safe_name).stem
@@ -205,6 +239,7 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
             content=text,
             source_type="upload",
             word_count=word_count,
+            gcs_uri=gcs_uri or "",
         )
         db.add(sample)
         db.commit()

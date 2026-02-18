@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
+  import VoiceButton from '$lib/components/VoiceButton.svelte';
 
   let { onResume: _ }: {
     onResume: (sessionId: number) => void;
@@ -59,6 +60,7 @@
     </div>
 
     <div class="toolbar">
+      <VoiceButton onTranscript={(text) => (topic += (topic ? ' ' : '') + text)} />
       <button
         class="start-writing-btn"
         onclick={startWriting}

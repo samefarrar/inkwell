@@ -13,6 +13,7 @@
 
   let fileInput = $state<HTMLInputElement>();
   let confirmDelete = $state<number | null>(null);
+  let dragging = $state(false);
 
   function goBack() {
     styles.clearCurrent();
@@ -75,6 +76,23 @@
     if (!styles.currentStyle) return;
     await styles.deleteStyle(styles.currentStyle.id);
     goBack();
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    dragging = true;
+  }
+
+  function handleDragLeave() {
+    dragging = false;
+  }
+
+  async function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    dragging = false;
+    const file = e.dataTransfer?.files[0];
+    if (!file || !styles.currentStyle) return;
+    await styles.uploadSample(styles.currentStyle.id, file);
   }
 
 </script>
@@ -142,7 +160,7 @@
           <input
             bind:this={fileInput}
             type="file"
-            accept=".txt,.md"
+            accept=".txt,.md,.pdf"
             onchange={handleFileChange}
             style="display:none"
           />
@@ -168,9 +186,21 @@
         </div>
       {/if}
 
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="drop-zone"
+        class:dragging
+        ondragover={handleDragOver}
+        ondragleave={handleDragLeave}
+        ondrop={handleDrop}
+      >
+        {#if dragging}
+          <div class="drop-overlay">Drop file to upload</div>
+        {/if}
+
       {#if styles.currentStyle.samples.length === 0}
         <div class="empty-samples">
-          <p>No samples yet. Add writing samples to help Inkwell learn your style.</p>
+          <p>No samples yet. Drag a file here or use the buttons above.</p>
         </div>
       {:else}
         <div class="sample-list">
@@ -198,6 +228,7 @@
           {/each}
         </div>
       {/if}
+      </div>
     </div>
   {/if}
 </div>
@@ -512,5 +543,33 @@
   .remove-btn.confirming {
     opacity: 1;
     color: #dc2626;
+  }
+
+  .drop-zone {
+    position: relative;
+    min-height: 80px;
+    border-radius: 12px;
+    transition: border-color 0.2s;
+  }
+
+  .drop-zone.dragging {
+    border: 2px dashed var(--accent);
+    background: rgba(232, 115, 58, 0.05);
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Outfit', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(232, 115, 58, 0.08);
+    border-radius: 12px;
+    z-index: 10;
+    pointer-events: none;
   }
 </style>
