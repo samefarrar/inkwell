@@ -40,9 +40,9 @@ proof_editor/
 │   │   │   ├── interviewer.py    # Targeted questioning to extract stories/insights
 │   │   │   ├── hook_developer.py # Develops hooks from interview material
 │   │   │   └── orchestrator.py   # Manages the interview → draft → refine workflow
-│   │   ├── drafting/         # Multi-angle draft generation
-│   │   │   ├── generator.py      # Generates 3 drafts (benefit, creative, productivity angles)
-│   │   │   └── synthesizer.py    # Merges highlighted favorites into refined draft
+│   │   ├── drafting/         # Multi-angle draft generation + synthesis
+│   │   │   ├── generator.py      # Generates 3 drafts in task-appropriate angles
+│   │   │   └── synthesizer.py    # Iterative 3-draft synthesis from highlight feedback
 │   │   ├── bridge/           # Proof Editor HTTP bridge client (localhost:9847)
 │   │   ├── style/            # Every Write Style Guide rule engine
 │   │   ├── learning/         # Feedback flywheel (preferences, patterns, confidence)
@@ -84,10 +84,18 @@ The agent is not a "generate and done" tool — it's a conversational writing pa
                  → Angles are task-appropriate (not always the same 3)
 4. HIGHLIGHT  → User highlights lines they like across all 3 drafts
                  → Flags sections to fix with notes
-                 → AI says "Got it, I'll make a new draft"
-5. SYNTHESIZE → AI merges favorites into a refined draft
-                 → Sends to Proof via bridge API
-6. FEEDBACK   → Proof style agent provides inline editorial suggestions
+                 → Adds custom labels via gear icon (e.g. "too_formal")
+                 → Can delete accidental highlights via X button
+                 → Can directly edit draft text (contenteditable)
+5. SYNTHESIZE → AI generates 3 NEW refined drafts (not 1 merged draft)
+                 → Keeps angles the user liked, replaces flagged angles
+                 → All highlights fed as semantic XML tags in prompt
+                 → User edits are reflected in the synthesis input
+                 → Loop repeats: highlight → synthesize → 3 new drafts
+                 → Continues until user clicks "Focus on this"
+6. FOCUS      → User selects one draft to focus on
+                 → Transitions to single-draft editing mode
+7. FEEDBACK   → Proof style agent provides inline editorial suggestions
                  → User accepts/rejects → compounds into learning flywheel
 ```
 
@@ -134,7 +142,7 @@ send_to_proof    → {"content": str, "title": str}
 
 **Draft Generator** (`drafting/generator.py`): Streams 3 drafts simultaneously over WebSocket via LiteLLM `create_draft` tool calls. Each draft is informed by: interview material, user's style preferences (from examples), learned patterns (from feedback history), and background research. Angles are task-appropriate.
 
-**Synthesizer** (`drafting/synthesizer.py`): Takes highlighted lines + flagged sections from the 3 drafts and produces a refined single draft. This is the "Got it, I'll make a new draft" step.
+**Synthesizer** (`drafting/synthesizer.py`): Generates 3 NEW refined drafts from highlight feedback. Annotates each previous draft with semantic XML tags (`<good>`, `<bad>`, `<custom_label>`) and streams 3 concurrent drafts via LiteLLM. Smart angle selection: keeps angles with more likes, replaces angles with more flags. Supports iterative rounds (highlight → synthesize → repeat).
 
 **Bridge Client** (`bridge/`): Async httpx client wrapping Proof's localhost:9847 API. All edits go through suggestions (`POST /marks/suggest-replace`, etc.) and comments (`POST /marks/comment`). Always include `X-Agent-Id` header and `"by": "ai:proof-style"` in bodies. For full draft delivery, use `POST /rewrite`.
 
@@ -142,7 +150,9 @@ send_to_proof    → {"content": str, "title": str}
 
 **Learning Flywheel** (`learning/`): SQLite-backed storage for:
 - Interview answers and extracted stories (reusable context)
-- Highlighted favorites across drafts (style signal)
+- Highlighted favorites across drafts with custom labels (style signal)
+- Drafts persisted per round (`Draft` model with `round` counter)
+- User text edits tracked via `draft.edit` messages
 - Accepted/rejected style suggestions (rule confidence)
 - User-uploaded writing examples by category
 - Derived voice/style preferences
@@ -214,8 +224,10 @@ The backend translates LiteLLM tool calls into typed WebSocket messages. The fro
 // Client → Server
 {"type": "task.select", "task_type": "essay", "topic": "..."}
 {"type": "interview.answer", "answer": "..."}
-{"type": "draft.highlight", "draft_index": 0, "start": 42, "end": 98, "sentiment": "like"}
-{"type": "draft.flag", "draft_index": 1, "start": 10, "end": 50, "note": "too generic"}
+{"type": "draft.highlight", "draft_index": 0, "start": 42, "end": 98, "sentiment": "like", "label": "insightful"}
+{"type": "highlight.update", "draft_index": 0, "highlight_index": 1, "label": "too_formal"}
+{"type": "highlight.remove", "draft_index": 0, "highlight_index": 2}
+{"type": "draft.edit", "draft_index": 0, "content": "..."}
 {"type": "draft.synthesize"}
 
 // Server → Client (mapped from LiteLLM tool calls)
@@ -225,9 +237,21 @@ The backend translates LiteLLM tool calls into typed WebSocket messages. The fro
 {"type": "draft.start", "draft_index": 0, "title": "...", "angle": "..."}
 {"type": "draft.chunk", "draft_index": 0, "content": "...", "done": false}
 {"type": "draft.complete", "draft_index": 0, "word_count": 452}
-{"type": "draft.synthesized", "content": "...", "sent_to_proof": true}
 {"type": "status", "message": "Developing your hook..."}
 ```
+
+### Synthesis XML Tag Convention
+
+When synthesizing, each draft is annotated with highlights as semantic XML tags:
+
+| sentiment | label | XML tag |
+|---|---|---|
+| like | (empty) | `<good>text</good>` |
+| flag | (empty) | `<bad>text</bad>` |
+| like | "insightful" | `<good_insightful>text</good_insightful>` |
+| flag | "too_formal" | `<too_formal>text</too_formal>` |
+
+The LLM is instructed to: incorporate `<good>` passages, rewrite/omit `<bad>` passages, and use custom labels as guidance.
 
 ### Frontend UI Mapping
 
@@ -237,9 +261,12 @@ The backend translates LiteLLM tool calls into typed WebSocket messages. The fro
 | `interview.question` | Chat bubble from AI |
 | `interview.answer` (client) | Chat bubble from user |
 | `search.result` | Inline context card |
-| `draft.start` + `draft.chunk` | TipTap panel with streaming text |
-| `draft.highlight` (client) | Cross-panel selection overlay |
-| `draft.synthesized` | Merged draft notification + Proof handoff |
+| `draft.start` + `draft.chunk` | TipTap panel with streaming text (used for both initial drafts and synthesis) |
+| `draft.highlight` (client) | Highlight popover (Like/Flag) + optional label |
+| `highlight.update` (client) | Updates label on existing highlight via gear icon |
+| `highlight.remove` (client) | Removes highlight via X button |
+| `draft.edit` (client) | User's contenteditable text changes sent to backend |
+| `draft.synthesize` (client) | Triggers 3 new drafts from highlight feedback |
 
 ## Style Rule Pattern
 
