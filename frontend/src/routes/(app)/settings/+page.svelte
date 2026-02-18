@@ -22,12 +22,12 @@
 	<section class="card">
 		<h2>Profile</h2>
 		<div class="field">
-			<label>Name</label>
-			<input type="text" value={data.user.name} disabled />
+			<label for="settings-name">Name</label>
+			<input id="settings-name" type="text" value={data.user.name} disabled />
 		</div>
 		<div class="field">
-			<label>Email</label>
-			<input type="email" value={data.user.email} disabled />
+			<label for="settings-email">Email</label>
+			<input id="settings-email" type="email" value={data.user.email} disabled />
 		</div>
 	</section>
 
