@@ -2,12 +2,20 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
 
 
 class InterviewMessage(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="session.id", index=True)
+    session_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("session.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
     role: str  # "user", "ai", "thought", "search", "status", "ready_to_draft"
     content: str  # main display text
     thought_json: str | None = None  # JSON for thought blocks

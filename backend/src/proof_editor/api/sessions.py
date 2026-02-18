@@ -1,26 +1,25 @@
-"""Session REST endpoints — extracted from main.py."""
+"""Session REST endpoints — scoped to authenticated user."""
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlmodel import func, select
 
-from proof_editor.db import get_session
+from proof_editor.auth_deps import get_current_user
+from proof_editor.db import get_db
 from proof_editor.models.draft import Draft
 from proof_editor.models.highlight import Highlight
 from proof_editor.models.interview_message import InterviewMessage
 from proof_editor.models.session import Session
+from proof_editor.models.user import User
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions() -> list[dict[str, Any]]:
-    """Return all sessions with summary metadata, newest first.
-
-    Uses a single JOIN query instead of N+1 per-session lookups.
-    """
-    with get_session() as db:
+async def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+    """Return user's sessions with summary metadata, newest first."""
+    with get_db() as db:
         stmt = (
             select(
                 Session.id,
@@ -32,6 +31,7 @@ async def list_sessions() -> list[dict[str, Any]]:
                 func.coalesce(func.max(Draft.round), 0).label("max_round"),
             )
             .outerjoin(Draft, Draft.session_id == Session.id)
+            .where(Session.user_id == user.id)
             .group_by(Session.id)
             .order_by(Session.created_at.desc())  # type: ignore[union-attr]
             .limit(50)
@@ -53,13 +53,14 @@ async def list_sessions() -> list[dict[str, Any]]:
 
 
 @router.get("/latest")
-async def latest_session() -> dict[str, Any]:
+async def latest_session(user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Return the most recent session that has drafts."""
-    with get_session() as db:
+    with get_db() as db:
         session_ids_with_drafts = select(Draft.session_id).distinct()
         stmt = (
             select(Session)
             .where(Session.id.in_(session_ids_with_drafts))  # type: ignore[union-attr]
+            .where(Session.user_id == user.id)
             .order_by(Session.created_at.desc())  # type: ignore[union-attr]
             .limit(1)
         )
@@ -121,11 +122,13 @@ async def latest_session() -> dict[str, Any]:
 
 
 @router.get("/{session_id}")
-async def get_session_detail(session_id: int) -> dict[str, Any]:
+async def get_session_detail(
+    session_id: int, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Return full session detail: interview + drafts by round + highlights."""
-    with get_session() as db:
+    with get_db() as db:
         sess = db.get(Session, session_id)
-        if not sess:
+        if not sess or sess.user_id != user.id:
             return {"found": False}
 
         im_stmt = (

@@ -1,4 +1,4 @@
-"""Style management REST endpoints."""
+"""Style management REST endpoints — scoped to authenticated user."""
 
 import asyncio
 from datetime import UTC, datetime
@@ -6,12 +6,14 @@ from pathlib import PurePosixPath
 from typing import Any
 
 import pymupdf
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlmodel import select
 
-from proof_editor.db import get_session
+from proof_editor.auth_deps import get_current_user
+from proof_editor.db import get_db
 from proof_editor.models.style import StyleSample, WritingStyle
+from proof_editor.models.user import User
 from proof_editor.storage import upload_to_gcs
 
 router = APIRouter(prefix="/api/styles", tags=["styles"])
@@ -57,13 +59,13 @@ class SampleCreate(BaseModel):
 
 
 @router.get("")
-async def list_styles() -> list[dict[str, Any]]:
-    """List all writing styles."""
-    with get_session() as db:
+async def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+    """List user's writing styles."""
+    with get_db() as db:
         styles = db.exec(
-            select(WritingStyle).order_by(
-                WritingStyle.updated_at.desc()  # type: ignore[union-attr]
-            )
+            select(WritingStyle)
+            .where(WritingStyle.user_id == user.id)
+            .order_by(WritingStyle.updated_at.desc())  # type: ignore[union-attr]
         ).all()
         return [
             {
@@ -78,10 +80,14 @@ async def list_styles() -> list[dict[str, Any]]:
 
 
 @router.post("")
-async def create_style(body: StyleCreate) -> dict[str, Any]:
+async def create_style(
+    body: StyleCreate, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Create a new writing style."""
-    with get_session() as db:
-        style = WritingStyle(name=body.name, description=body.description)
+    with get_db() as db:
+        style = WritingStyle(
+            name=body.name, description=body.description, user_id=user.id
+        )
         db.add(style)
         db.commit()
         db.refresh(style)
@@ -92,13 +98,21 @@ async def create_style(body: StyleCreate) -> dict[str, Any]:
         }
 
 
+def _get_user_style(db, style_id: int, user_id: int) -> WritingStyle:  # type: ignore[no-untyped-def]
+    """Get a style, verifying ownership. Raises 404 if not found."""
+    style = db.get(WritingStyle, style_id)
+    if not style or style.user_id != user_id:
+        raise HTTPException(404, "Style not found")
+    return style
+
+
 @router.get("/{style_id}")
-async def get_style(style_id: int) -> dict[str, Any]:
+async def get_style(
+    style_id: int, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Get a style with its samples."""
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
+    with get_db() as db:
+        style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         samples = db.exec(
             select(StyleSample)
@@ -125,12 +139,12 @@ async def get_style(style_id: int) -> dict[str, Any]:
 
 
 @router.put("/{style_id}")
-async def update_style(style_id: int, body: StyleUpdate) -> dict[str, Any]:
+async def update_style(
+    style_id: int, body: StyleUpdate, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Update a style's name or description."""
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
+    with get_db() as db:
+        style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         if body.name is not None:
             style.name = body.name
@@ -143,14 +157,13 @@ async def update_style(style_id: int, body: StyleUpdate) -> dict[str, Any]:
 
 
 @router.delete("/{style_id}")
-async def delete_style(style_id: int) -> dict[str, str]:
+async def delete_style(
+    style_id: int, user: User = Depends(get_current_user)
+) -> dict[str, str]:
     """Delete a style and all its samples."""
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
+    with get_db() as db:
+        style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
-        # Cascade delete samples
         samples = db.exec(
             select(StyleSample).where(StyleSample.style_id == style_id)
         ).all()
@@ -162,12 +175,12 @@ async def delete_style(style_id: int) -> dict[str, str]:
 
 
 @router.post("/{style_id}/samples")
-async def add_sample(style_id: int, body: SampleCreate) -> dict[str, Any]:
+async def add_sample(
+    style_id: int, body: SampleCreate, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Add a text sample to a style."""
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
+    with get_db() as db:
+        _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         word_count = len(body.content.split())
         sample = StyleSample(
@@ -189,7 +202,9 @@ async def add_sample(style_id: int, body: SampleCreate) -> dict[str, Any]:
 
 
 @router.post("/{style_id}/samples/upload")
-async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
+async def upload_sample(
+    style_id: int, file: UploadFile, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
     """Upload a document as a style sample (txt, md, pdf)."""
     safe_name = PurePosixPath(file.filename or "untitled").name
     ext = PurePosixPath(safe_name).suffix.lower()
@@ -222,7 +237,11 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
             raise HTTPException(400, "File must be valid UTF-8 text")
 
     # Derive content type from extension (don't trust client-provided value)
-    ext_to_mime = {".txt": "text/plain", ".md": "text/markdown", ".pdf": "application/pdf"}
+    ext_to_mime = {
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+        ".pdf": "application/pdf",
+    }
     content_type = ext_to_mime.get(ext, "application/octet-stream")
     gcs_uri = await asyncio.to_thread(
         upload_to_gcs, raw_bytes, style_id, safe_name, content_type
@@ -231,10 +250,8 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
     word_count = len(text.split())
     title = PurePosixPath(safe_name).stem
 
-    with get_session() as db:
-        style = db.get(WritingStyle, style_id)
-        if not style:
-            raise HTTPException(404, "Style not found")
+    with get_db() as db:
+        _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         sample = StyleSample(
             style_id=style_id,
@@ -256,9 +273,13 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
 
 
 @router.delete("/{style_id}/samples/{sample_id}")
-async def delete_sample(style_id: int, sample_id: int) -> dict[str, str]:
+async def delete_sample(
+    style_id: int, sample_id: int, user: User = Depends(get_current_user)
+) -> dict[str, str]:
     """Delete a specific sample from a style."""
-    with get_session() as db:
+    with get_db() as db:
+        _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
+
         sample = db.get(StyleSample, sample_id)
         if not sample or sample.style_id != style_id:
             raise HTTPException(404, "Sample not found")

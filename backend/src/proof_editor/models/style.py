@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
 
 
@@ -9,6 +10,14 @@ class WritingStyle(SQLModel, table=True):
     __tablename__ = "writing_style"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("user.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
     name: str = Field(index=True, max_length=200)
     description: str = Field(default="", max_length=2000)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -19,7 +28,14 @@ class StyleSample(SQLModel, table=True):
     __tablename__ = "style_sample"
 
     id: int | None = Field(default=None, primary_key=True)
-    style_id: int = Field(foreign_key="writing_style.id", index=True)
+    style_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("writing_style.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
     title: str = Field(default="", max_length=500)
     content: str
     source_type: str = "paste"  # "upload" | "paste"
