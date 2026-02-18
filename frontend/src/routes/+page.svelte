@@ -4,6 +4,7 @@
   import { session } from '$lib/stores/session.svelte';
   import { drafts } from '$lib/stores/drafts.svelte';
   import { StreamBuffer } from '$lib/stream-buffer.svelte';
+  import { BASE_API_URL } from '$lib/config';
   import TaskSelector from '$lib/components/TaskSelector.svelte';
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
@@ -13,7 +14,7 @@
 
   async function resumeSession(sessionId: number) {
     try {
-      const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}`);
+      const res = await fetch(`${BASE_API_URL}/api/sessions/${sessionId}`);
       const data = await res.json();
       if (!data.found) return;
 

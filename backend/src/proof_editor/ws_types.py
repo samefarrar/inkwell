@@ -56,6 +56,10 @@ class SessionResume(BaseModel):
     session_id: int
 
 
+class SessionCancel(BaseModel):
+    type: Literal["session.cancel"] = "session.cancel"
+
+
 # --- Server → Client ---
 
 
@@ -130,6 +134,7 @@ ClientMessage = (
     | DraftEdit
     | DraftSynthesize
     | SessionResume
+    | SessionCancel
 )
 
 ServerMessage = (

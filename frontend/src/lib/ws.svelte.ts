@@ -1,8 +1,9 @@
 /**
  * WebSocket client — connects to the backend and handles typed messages.
  * Auto-reconnects with exponential backoff.
- * Supports provider query param for search experiments.
  */
+
+import { BASE_WS_URL } from '$lib/config';
 
 export type ServerMessage =
   | { type: 'thought'; assessment: string; missing: string[]; sufficient: boolean }
@@ -32,11 +33,11 @@ export type ClientMessage =
   | { type: 'highlight.remove'; draft_index: number; highlight_index: number }
   | { type: 'draft.edit'; draft_index: number; content: string }
   | { type: 'draft.synthesize' }
-  | { type: 'session.resume'; session_id: number };
+  | { type: 'session.resume'; session_id: number }
+  | { type: 'session.cancel' };
 
 type MessageHandler = (msg: ServerMessage) => void;
 
-const BASE_WS_URL = 'ws://localhost:8000/ws';
 const MAX_RECONNECT_DELAY = 30000;
 
 export class WebSocketClient {

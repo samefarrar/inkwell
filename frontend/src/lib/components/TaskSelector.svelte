@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
+  import { BASE_API_URL } from '$lib/config';
 
   interface SessionSummary {
     id: number;
@@ -30,7 +31,7 @@
   let sessions = $state<SessionSummary[]>([]);
 
   onMount(() => {
-    fetch('http://localhost:8000/api/sessions')
+    fetch(`${BASE_API_URL}/api/sessions`)
       .then((r) => r.json())
       .then((data: SessionSummary[]) => {
         sessions = data;

@@ -3,6 +3,7 @@
 States: task_select → interview → drafting → highlighting → focused
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -38,6 +39,7 @@ class Orchestrator:
         self.key_material: list[str] = []
         self.synthesis_round: int = 0
         self._interview_msg_counter: int = 0
+        self._active_tasks: list[asyncio.Task[Any]] = []
 
         # These get initialized lazily to avoid import-time LLM setup
         self._interviewer: Any = None
@@ -46,6 +48,15 @@ class Orchestrator:
     async def send(self, msg: Any) -> None:
         """Send a typed message over WebSocket."""
         await self.ws.send_text(msg.model_dump_json())
+
+    async def handle_cancel(self) -> None:
+        """Cancel any in-flight LLM tasks and reset to idle."""
+        cancelled = len(self._active_tasks)
+        for task in self._active_tasks:
+            task.cancel()
+        self._active_tasks = []
+        self.state = "idle"
+        logger.info("Session cancelled, %d tasks aborted", cancelled)
 
     def _save_interview_message(
         self,
