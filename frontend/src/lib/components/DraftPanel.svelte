@@ -480,9 +480,11 @@
     border-bottom: 2px solid rgba(232, 115, 58, 0.4);
   }
 
-  /* Highlight label tag */
+  /* Highlight label tag — floats above highlight start, outside text flow */
   .hl-label {
-    display: inline-block;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
     font-family: 'Outfit', sans-serif;
     font-size: 10px;
     font-weight: 600;
@@ -492,18 +494,23 @@
     border: 1px solid var(--paper-border);
     border-radius: 3px;
     padding: 1px 5px;
-    margin-right: 4px;
-    vertical-align: middle;
+    margin-bottom: 2px;
     line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 4;
   }
 
-  /* Highlight hover controls */
+  /* Highlight hover controls — float above highlight end, outside text flow */
   .hl-controls {
-    display: inline-flex;
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    display: flex;
     gap: 2px;
-    margin-left: 2px;
-    vertical-align: middle;
+    margin-bottom: 2px;
     animation: popIn 0.1s ease-out;
+    z-index: 5;
   }
 
   .hl-ctrl-btn {
