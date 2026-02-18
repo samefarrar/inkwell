@@ -11,6 +11,7 @@ class TaskSelect(BaseModel):
     type: Literal["task.select"] = "task.select"
     task_type: str
     topic: str
+    style_id: int | None = None
 
 
 class InterviewAnswer(BaseModel):

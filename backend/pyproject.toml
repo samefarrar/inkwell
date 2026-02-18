@@ -15,6 +15,9 @@ dependencies = [
     "exa-py>=2.4.0",
     "python-dotenv>=1.2.1",
     "ddgs>=9.10.0",
+    "python-multipart>=0.0.22",
+    "pymupdf>=1.27.1",
+    "google-cloud-storage>=3.9.0",
 ]
 
 [project.scripts]

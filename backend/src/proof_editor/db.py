@@ -21,6 +21,7 @@ def create_tables() -> None:
         interview_message,
         preference,
         session,
+        style,
     )
 
     SQLModel.metadata.create_all(engine)

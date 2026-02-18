@@ -11,6 +11,8 @@ from pydantic import ValidationError
 
 from proof_editor.agent.orchestrator import Orchestrator
 from proof_editor.api.sessions import router as sessions_router
+from proof_editor.api.styles import router as styles_router
+from proof_editor.api.voice import router as voice_router
 from proof_editor.db import create_tables
 from proof_editor.ws_types import (
     DraftEdit,
@@ -20,7 +22,7 @@ from proof_editor.ws_types import (
     HighlightRemove,
     HighlightUpdate,
     InterviewAnswer,
-    SessionCancel,
+    SessionResume,
     TaskSelect,
 )
 
@@ -55,6 +57,8 @@ app.add_middleware(
 )
 
 app.include_router(sessions_router)
+app.include_router(styles_router)
+app.include_router(voice_router)
 
 
 @app.get("/health")
@@ -63,9 +67,16 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+ALLOWED_ORIGINS = {"http://localhost:5173", "http://localhost:4173"}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """Main WebSocket endpoint for the writing partner workflow."""
+    origin = websocket.headers.get("origin", "")
+    if origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
     await websocket.accept()
     orchestrator = Orchestrator(websocket)
 
@@ -100,11 +111,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 elif msg_type == "draft.synthesize":
                     await orchestrator.handle_synthesize(DraftSynthesize(**data))
                 elif msg_type == "session.resume":
-                    from proof_editor.ws_types import SessionResume
-
                     await orchestrator.handle_resume(SessionResume(**data).session_id)
                 elif msg_type == "session.cancel":
-                    SessionCancel(**data)  # validate
                     await orchestrator.handle_cancel()
                 else:
                     await websocket.send_text(

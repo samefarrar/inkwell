@@ -25,6 +25,10 @@ Thumbs.db
 .env
 .env.local
 
+# GCP service account keys
+inkwell-sa-key.json
+*-sa-key.json
+
 # Build
 build/
 
