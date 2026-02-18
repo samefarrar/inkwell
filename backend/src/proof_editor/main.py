@@ -65,9 +65,16 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+ALLOWED_ORIGINS = {"http://localhost:5173", "http://localhost:4173"}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """Main WebSocket endpoint for the writing partner workflow."""
+    origin = websocket.headers.get("origin", "")
+    if origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
     await websocket.accept()
     orchestrator = Orchestrator(websocket)
 

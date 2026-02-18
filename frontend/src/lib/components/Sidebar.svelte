@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { session, type SessionSummary } from '$lib/stores/session.svelte';
+  import { styles } from '$lib/stores/styles.svelte';
   import { ws } from '$lib/ws.svelte';
 
   let { onResume, onNewSession }: {
@@ -8,15 +9,22 @@
     onNewSession: () => void;
   } = $props();
 
+  let switchDebounce: ReturnType<typeof setTimeout> | null = null;
+
   onMount(() => {
     session.loadSessions();
+    styles.loadStyles();
   });
 
   function handleSessionClick(s: SessionSummary) {
     if (s.id === session.currentSessionId) return;
-    // Cancel in-flight work before switching
-    ws.send({ type: 'session.cancel' });
-    onResume(s.id);
+    // Debounce rapid switching (200ms)
+    if (switchDebounce) clearTimeout(switchDebounce);
+    switchDebounce = setTimeout(() => {
+      ws.send({ type: 'session.cancel' });
+      onResume(s.id);
+      switchDebounce = null;
+    }, 200);
   }
 
   function handleNewSession() {
@@ -109,9 +117,37 @@
           {/each}
         </div>
       {/if}
-    {:else if session.appView === 'styles'}
+    {:else if session.appView === 'styles' || session.appView === 'style_editor'}
       <div class="section-label">WRITING STYLES</div>
-      <div class="empty-state">Style management coming soon</div>
+      {#if styles.loading}
+        <div class="skeleton-list">
+          {#each Array(3) as _}
+            <div class="skeleton-item">
+              <div class="skeleton-line short"></div>
+            </div>
+          {/each}
+        </div>
+      {:else if styles.styles.length === 0}
+        <div class="empty-state">No styles yet</div>
+      {:else}
+        <div class="session-list">
+          {#each styles.styles as style (style.id)}
+            <button
+              class="session-item"
+              class:active={styles.currentStyle?.id === style.id}
+              onclick={() => {
+                styles.loadStyle(style.id);
+                session.setAppView('style_editor');
+              }}
+            >
+              <span class="session-topic">{style.name}</span>
+              {#if style.description}
+                <span class="session-meta">{style.description}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
     {/if}
   </div>
 </aside>
