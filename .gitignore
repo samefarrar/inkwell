@@ -31,3 +31,7 @@ build/
 # Playwright
 .playwright/
 .playwright-cli/
+
+# Dev server helper
+.dev-pids/
+.dev-logs/
