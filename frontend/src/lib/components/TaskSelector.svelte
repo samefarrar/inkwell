@@ -2,6 +2,28 @@
   import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
 
+  interface LatestSession {
+    found: boolean;
+    session_id?: number;
+    task_type?: string;
+    topic?: string;
+    synthesis_round?: number;
+    drafts?: { title: string; angle: string; content: string; word_count: number }[];
+    highlights?: {
+      draft_index: number;
+      start: number;
+      end: number;
+      sentiment: 'like' | 'flag';
+      label?: string;
+      note?: string;
+    }[];
+  }
+
+  let { latestSession = null, onResume }: {
+    latestSession: LatestSession | null;
+    onResume: (data: LatestSession) => void;
+  } = $props();
+
   const taskTypes = [
     { value: 'essay', label: 'Essay' },
     { value: 'review', label: 'Review' },
@@ -57,6 +79,22 @@
   >
     Start Interview
   </button>
+
+  {#if latestSession?.found}
+    <button
+      class="resume-link anim"
+      style="animation-delay: 400ms"
+      onclick={() => onResume(latestSession!)}
+    >
+      Resume last session: {latestSession.topic}
+      <span class="resume-meta">
+        {latestSession.drafts?.length ?? 0} drafts
+        {#if (latestSession.synthesis_round ?? 0) > 0}
+          &middot; round {latestSession.synthesis_round}
+        {/if}
+      </span>
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -195,5 +233,35 @@
   @keyframes glowPulse {
     0%, 100% { box-shadow: 0 0 0 rgba(232, 115, 58, 0); }
     50% { box-shadow: 0 0 20px var(--accent-glow); }
+  }
+
+  /* Resume link */
+  .resume-link {
+    margin-top: 16px;
+    padding: 12px 20px;
+    background: transparent;
+    border: 1px solid var(--chrome-border);
+    border-radius: 10px;
+    color: var(--chrome-text-muted);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .resume-link:hover {
+    color: var(--chrome-text);
+    border-color: var(--accent);
+  }
+
+  .resume-meta {
+    display: block;
+    font-size: 12px;
+    color: var(--chrome-text-muted);
+    margin-top: 2px;
+    opacity: 0.7;
   }
 </style>

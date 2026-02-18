@@ -4,6 +4,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,6 +60,85 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/sessions/latest")
+async def latest_session() -> dict[str, Any]:
+    """Return the most recent session that has drafts."""
+    from sqlmodel import select
+
+    from proof_editor.db import get_session
+    from proof_editor.models.draft import Draft
+    from proof_editor.models.highlight import Highlight
+    from proof_editor.models.session import Session
+
+    with get_session() as db:
+        # Find session IDs that have drafts
+        session_ids_with_drafts = select(Draft.session_id).distinct()
+        stmt = (
+            select(Session)
+            .where(Session.id.in_(session_ids_with_drafts))  # type: ignore[union-attr]
+            .order_by(Session.created_at.desc())  # type: ignore[union-attr]
+            .limit(1)
+        )
+        sess = db.exec(stmt).first()
+        if not sess:
+            return {"found": False}
+
+        # Get max round
+        max_round_stmt = (
+            select(Draft.round)
+            .where(Draft.session_id == sess.id)
+            .order_by(Draft.round.desc())  # type: ignore[union-attr]
+            .limit(1)
+        )
+        max_round = db.exec(max_round_stmt).first() or 0
+
+        # Load latest-round drafts
+        draft_stmt = (
+            select(Draft)
+            .where(Draft.session_id == sess.id)
+            .where(Draft.round == max_round)
+            .order_by(Draft.draft_index)
+        )
+        db_drafts = db.exec(draft_stmt).all()
+
+        # Load highlights
+        hl_stmt = (
+            select(Highlight)
+            .where(Highlight.session_id == sess.id)
+            .order_by(Highlight.id)
+        )
+        db_highlights = db.exec(hl_stmt).all()
+
+        return {
+            "found": True,
+            "session_id": sess.id,
+            "task_type": sess.task_type,
+            "topic": sess.topic,
+            "synthesis_round": max_round,
+            "drafts": [
+                {
+                    "title": d.title,
+                    "angle": d.angle,
+                    "content": d.content,
+                    "word_count": d.word_count,
+                }
+                for d in db_drafts
+            ],
+            "highlights": [
+                {
+                    "draft_index": h.draft_index,
+                    "start": h.start,
+                    "end": h.end,
+                    "text": h.text,
+                    "sentiment": h.sentiment,
+                    "label": h.label,
+                    "note": h.note,
+                }
+                for h in db_highlights
+            ],
+        }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """Main WebSocket endpoint for the writing partner workflow."""
@@ -95,6 +175,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     )
                 elif msg_type == "draft.synthesize":
                     await orchestrator.handle_synthesize(DraftSynthesize(**data))
+                elif msg_type == "session.resume":
+                    from proof_editor.ws_types import SessionResume
+
+                    await orchestrator.handle_resume(SessionResume(**data).session_id)
                 else:
                     await websocket.send_text(
                         ErrorMessage(

@@ -112,6 +112,21 @@ class Orchestrator:
         """Transition to drafting — generate 3 concurrent drafts."""
         from proof_editor.drafting.generator import DraftGenerator
 
+        # Persist interview summary + key material to session
+        if self.session_id:
+            import json as _json
+
+            from proof_editor.db import get_session as _get_db
+            from proof_editor.models.session import Session as _Session
+
+            with _get_db() as db:
+                sess = db.get(_Session, self.session_id)
+                if sess:
+                    sess.interview_summary = self.interview_summary
+                    sess.key_material = _json.dumps(self.key_material)
+                    sess.status = "drafting"
+                    db.commit()
+
         await self.send(StatusMessage(message="Developing your drafts..."))
 
         self._generator = DraftGenerator(
@@ -134,6 +149,7 @@ class Orchestrator:
 
         from proof_editor.db import get_session
         from proof_editor.models.draft import Draft
+        from proof_editor.models.session import Session as _Session
 
         with get_session() as db:
             for i, d in enumerate(self.drafts):
@@ -147,6 +163,10 @@ class Orchestrator:
                     round=self.synthesis_round,
                 )
                 db.add(draft)
+            # Update session status
+            sess = db.get(_Session, self.session_id)
+            if sess:
+                sess.status = "highlighting"
             db.commit()
 
     async def handle_highlight(self, msg: DraftHighlight) -> None:
@@ -326,3 +346,85 @@ class Orchestrator:
         self.highlights = []
         self._save_drafts()
         self.state = "highlighting"
+
+    async def handle_resume(self, session_id: int) -> None:
+        """Hydrate orchestrator state from a persisted session."""
+        import json as _json
+
+        from sqlmodel import select
+
+        from proof_editor.db import get_session as _get_db
+        from proof_editor.models.draft import Draft
+        from proof_editor.models.highlight import Highlight
+        from proof_editor.models.session import Session as _Session
+
+        with _get_db() as db:
+            sess = db.get(_Session, session_id)
+            if not sess:
+                await self.send(ErrorMessage(message="Session not found"))
+                return
+
+            self.session_id = sess.id
+            self.task_type = sess.task_type
+            self.topic = sess.topic
+            self.interview_summary = sess.interview_summary or ""
+            self.key_material = (
+                _json.loads(sess.key_material) if sess.key_material else []
+            )
+
+            # Load latest-round drafts
+            max_round_stmt = (
+                select(Draft.round)
+                .where(Draft.session_id == session_id)
+                .order_by(Draft.round.desc())  # type: ignore[union-attr]
+                .limit(1)
+            )
+            max_round_result = db.exec(max_round_stmt).first()
+            max_round = max_round_result if max_round_result is not None else 0
+            self.synthesis_round = max_round
+
+            draft_stmt = (
+                select(Draft)
+                .where(Draft.session_id == session_id)
+                .where(Draft.round == max_round)
+                .order_by(Draft.draft_index)
+            )
+            db_drafts = db.exec(draft_stmt).all()
+            self.drafts = [
+                {
+                    "title": d.title,
+                    "angle": d.angle,
+                    "content": d.content,
+                    "word_count": d.word_count,
+                }
+                for d in db_drafts
+            ]
+
+            # Load highlights
+            hl_stmt = (
+                select(Highlight)
+                .where(Highlight.session_id == session_id)
+                .order_by(Highlight.id)
+            )
+            db_highlights = db.exec(hl_stmt).all()
+            self.highlights = [
+                {
+                    "draft_index": h.draft_index,
+                    "start": h.start,
+                    "end": h.end,
+                    "text": h.text,
+                    "sentiment": h.sentiment,
+                    "label": h.label,
+                    "note": h.note,
+                }
+                for h in db_highlights
+            ]
+
+        self.state = "highlighting"
+        logger.info(
+            "Resumed session %d: %d drafts, %d highlights, round %d",
+            session_id,
+            len(self.drafts),
+            len(self.highlights),
+            self.synthesis_round,
+        )

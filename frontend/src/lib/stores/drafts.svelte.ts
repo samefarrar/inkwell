@@ -135,6 +135,51 @@ class DraftsStore {
 		return this.drafts.reduce((sum, d) => sum + d.highlights.length, 0);
 	}
 
+	loadFromSession(
+		sessionDrafts: { title: string; angle: string; content: string; word_count: number }[],
+		sessionHighlights: {
+			draft_index: number;
+			start: number;
+			end: number;
+			sentiment: 'like' | 'flag';
+			label?: string;
+			note?: string;
+		}[],
+		synthesisRound: number
+	): void {
+		this.buffers.forEach((b) => b?.destroy());
+		this.buffers = [null, null, null];
+		this.synthesisRound = synthesisRound;
+		this.synthesizing = false;
+
+		this.drafts = sessionDrafts.map((d) => ({
+			title: d.title,
+			angle: d.angle,
+			content: d.content,
+			wordCount: d.word_count,
+			streaming: false,
+			complete: true,
+			highlights: []
+		}));
+
+		// Distribute highlights to their respective drafts
+		for (const h of sessionHighlights) {
+			const draft = this.drafts[h.draft_index];
+			if (draft) {
+				draft.highlights = [
+					...draft.highlights,
+					{
+						start: h.start,
+						end: h.end,
+						sentiment: h.sentiment,
+						label: h.label,
+						note: h.note
+					}
+				];
+			}
+		}
+	}
+
 	reset(): void {
 		this.buffers.forEach((b) => b?.destroy());
 		this.buffers = [null, null, null];

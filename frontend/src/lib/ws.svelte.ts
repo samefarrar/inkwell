@@ -31,7 +31,8 @@ export type ClientMessage =
   | { type: 'highlight.update'; draft_index: number; highlight_index: number; label: string }
   | { type: 'highlight.remove'; draft_index: number; highlight_index: number }
   | { type: 'draft.edit'; draft_index: number; content: string }
-  | { type: 'draft.synthesize' };
+  | { type: 'draft.synthesize' }
+  | { type: 'session.resume'; session_id: number };
 
 type MessageHandler = (msg: ServerMessage) => void;
 

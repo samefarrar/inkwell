@@ -51,6 +51,11 @@ class DraftSynthesize(BaseModel):
     type: Literal["draft.synthesize"] = "draft.synthesize"
 
 
+class SessionResume(BaseModel):
+    type: Literal["session.resume"] = "session.resume"
+    session_id: int
+
+
 # --- Server → Client ---
 
 
@@ -124,6 +129,7 @@ ClientMessage = (
     | HighlightRemove
     | DraftEdit
     | DraftSynthesize
+    | SessionResume
 )
 
 ServerMessage = (

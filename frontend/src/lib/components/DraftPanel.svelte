@@ -19,6 +19,8 @@
   let labelPopover = $state<{ highlightIndex: number; x: number; y: number } | null>(null);
   let labelInput = $state('');
   let hoveredHighlight = $state<number | null>(null);
+  /** True while user is typing — suppresses reactive DOM rebuild of segments. */
+  let userEditing = false;
 
   $effect(() => {
     if (draft.streaming && draft.content && bodyEl) {
@@ -28,9 +30,20 @@
     }
   });
 
-  /** Walk text nodes to compute a character offset relative to the container. */
+  /** Filter that skips text nodes inside .hl-label and .hl-controls (non-content UI). */
+  const contentTextFilter: NodeFilter = {
+    acceptNode(n: Node): number {
+      const parent = (n as Text).parentElement;
+      if (parent?.closest('.hl-label, .hl-controls')) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  };
+
+  /** Walk only content text nodes (skipping labels/controls) to get a character offset. */
   function getTextOffset(container: HTMLElement, node: Node, offset: number): number {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, contentTextFilter);
     let charCount = 0;
     let current = walker.nextNode();
     while (current) {
@@ -39,6 +52,19 @@
       current = walker.nextNode();
     }
     return charCount;
+  }
+
+  /** Read only content text from the contenteditable, skipping label/control UI text. */
+  function getContentText(): string {
+    if (!textEl) return '';
+    const walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT, contentTextFilter);
+    let text = '';
+    let current = walker.nextNode();
+    while (current) {
+      text += current.textContent ?? '';
+      current = walker.nextNode();
+    }
+    return text;
   }
 
   function handleMouseUp(e: MouseEvent) {
@@ -129,9 +155,12 @@
   /** Handle contenteditable input for draft editing. */
   function handleInput() {
     if (!textEl) return;
-    const newContent = textEl.textContent ?? '';
+    const newContent = getContentText();
     if (newContent !== draft.content) {
+      userEditing = true;
       onedit?.(newContent);
+      // Clear after Svelte's microtask rendering cycle completes
+      requestAnimationFrame(() => { userEditing = false; });
     }
   }
 
@@ -169,7 +198,18 @@
     return segments;
   }
 
-  let segments = $derived(buildSegments(draft.content, draft.highlights));
+  let segments = $state<Segment[]>([]);
+
+  $effect(() => {
+    // Re-read reactive deps so Svelte tracks them
+    const content = draft.content;
+    const highlights = draft.highlights;
+    // Skip DOM rebuild when the user is actively typing —
+    // the contenteditable DOM already has the correct text.
+    if (!userEditing) {
+      segments = buildSegments(content, highlights);
+    }
+  });
 </script>
 
 <div

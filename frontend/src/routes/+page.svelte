@@ -8,11 +8,55 @@
   import Interview from '$lib/components/Interview.svelte';
   import DraftComparison from '$lib/components/DraftComparison.svelte';
 
+  interface LatestSession {
+    found: boolean;
+    session_id?: number;
+    task_type?: string;
+    topic?: string;
+    synthesis_round?: number;
+    drafts?: { title: string; angle: string; content: string; word_count: number }[];
+    highlights?: {
+      draft_index: number;
+      start: number;
+      end: number;
+      sentiment: 'like' | 'flag';
+      label?: string;
+      note?: string;
+    }[];
+  }
+
   let unsubscribe: (() => void) | undefined;
   let activeBuffers: StreamBuffer[] = [];
+  let latestSession = $state<LatestSession | null>(null);
+
+  function resumeSession(data: LatestSession) {
+    if (!data.found || !data.session_id || !data.drafts?.length) return;
+
+    // Populate drafts store
+    drafts.loadFromSession(data.drafts, data.highlights ?? [], data.synthesis_round ?? 0);
+
+    // Set session metadata and switch screen
+    session.taskType = data.task_type ?? '';
+    session.topic = data.topic ?? '';
+    session.screen = 'drafts';
+
+    // Tell backend to hydrate its orchestrator
+    ws.send({ type: 'session.resume', session_id: data.session_id });
+
+    // Clear the resume prompt
+    latestSession = null;
+  }
 
   onMount(() => {
     ws.connect();
+
+    // Fetch latest session for resume button
+    fetch('http://localhost:8000/api/sessions/latest')
+      .then((r) => r.json())
+      .then((data: LatestSession) => {
+        if (data.found) latestSession = data;
+      })
+      .catch(() => {});
 
     unsubscribe = ws.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
@@ -81,10 +125,15 @@
           break;
 
         case 'error':
+          // If synthesis was in progress, reset the loading state
+          if (drafts.synthesizing) {
+            drafts.synthesizing = false;
+          }
           session.addMessage({
             role: 'status',
             content: `Error: ${msg.message}`
           });
+          console.error('[WS] Error from server:', msg.message);
           break;
       }
     });
@@ -135,7 +184,7 @@
     {#key session.screen}
       <div class="screen">
         {#if session.screen === 'task'}
-          <TaskSelector />
+          <TaskSelector {latestSession} onResume={resumeSession} />
         {:else if session.screen === 'interview'}
           <Interview />
         {:else if session.screen === 'drafts'}
