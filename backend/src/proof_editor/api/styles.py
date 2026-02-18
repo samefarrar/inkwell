@@ -221,9 +221,12 @@ async def upload_sample(style_id: int, file: UploadFile) -> dict[str, Any]:
         except UnicodeDecodeError:
             raise HTTPException(400, "File must be valid UTF-8 text")
 
-    # Upload original to GCS (returns None if GCS not configured)
-    content_type = file.content_type or "application/octet-stream"
-    gcs_uri = upload_to_gcs(raw_bytes, style_id, safe_name, content_type)
+    # Derive content type from extension (don't trust client-provided value)
+    ext_to_mime = {".txt": "text/plain", ".md": "text/markdown", ".pdf": "application/pdf"}
+    content_type = ext_to_mime.get(ext, "application/octet-stream")
+    gcs_uri = await asyncio.to_thread(
+        upload_to_gcs, raw_bytes, style_id, safe_name, content_type
+    )
 
     word_count = len(text.split())
     title = PurePosixPath(safe_name).stem

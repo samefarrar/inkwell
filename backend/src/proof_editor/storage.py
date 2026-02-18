@@ -1,6 +1,5 @@
 """Google Cloud Storage integration for file uploads."""
 
-import datetime
 import logging
 import os
 import uuid
@@ -54,21 +53,3 @@ def upload_to_gcs(
     blob.upload_from_string(data, content_type=content_type)
 
     return f"gs://{BUCKET_NAME}/{blob_name}"
-
-
-def generate_signed_url(
-    blob_name: str,
-    expiration_minutes: int = 60,
-) -> str | None:
-    """Generate a temporary download URL. Returns None if GCS disabled."""
-    client = _get_client()
-    if client is None:
-        return None
-
-    bucket = client.bucket(BUCKET_NAME)
-    blob = bucket.blob(blob_name)
-    return blob.generate_signed_url(
-        version="v4",
-        expiration=datetime.timedelta(minutes=expiration_minutes),
-        method="GET",
-    )
