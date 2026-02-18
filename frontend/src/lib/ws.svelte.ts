@@ -71,9 +71,14 @@ export class WebSocketClient {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event: CloseEvent) => {
       this._connected = false;
-      console.log('[WS] Disconnected');
+      console.log('[WS] Disconnected', event.code);
+      if (event.code === 4001) {
+        // Auth expired — redirect, don't reconnect
+        window.location.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname);
+        return;
+      }
       if (this.shouldReconnect) {
         setTimeout(() => this.connect(), this.reconnectDelay);
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
