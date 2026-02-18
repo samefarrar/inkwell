@@ -1,7 +1,7 @@
 ---
 title: "feat: SaaS Boilerplate — Auth, Users, Dashboard, Payments, Landing Page"
 type: feat
-status: active
+status: completed
 date: 2026-02-18
 deepened: 2026-02-18
 ---
@@ -659,47 +659,47 @@ erDiagram
 
 ### Functional Requirements
 
-- [ ] New users can register with email + password + name
-- [ ] Registered users can log in and receive an httpOnly JWT cookie
-- [ ] Logged-in users are redirected from `/login` and `/register` to `/dashboard`
-- [ ] Unauthenticated users are redirected from `/(app)/*` routes to `/login?returnTo=...`
-- [ ] After login, users are redirected to the `returnTo` URL (if relative) or `/dashboard`
-- [ ] Users can log out (cookie cleared, redirected to `/`)
-- [ ] Dashboard shows only the current user's sessions
-- [ ] "New session" creates a session owned by the current user
-- [ ] `session.resume` over WebSocket rejects sessions not owned by the current user
-- [ ] WebSocket connections without a valid JWT cookie are rejected (code 4001)
-- [ ] WebSocket 4001 close triggers redirect to `/login` (no infinite reconnect loop)
-- [ ] Landing page renders at `/` with hero, how-it-works, features, pricing, CTA, footer
-- [ ] Pricing section shows Free / Pro / Team; Free CTA → register, paid → "Coming Soon" modal
-- [ ] Settings page shows profile (editable name), password change, current plan
-- [ ] All existing REST endpoints (`/api/sessions`, `/api/styles`) are scoped to the current user
-- [ ] Child resources (drafts, highlights, style samples) verified through parent ownership
-- [ ] The `User.plan` field defaults to `Plan.FREE` on registration
+- [x] New users can register with email + password + name
+- [x] Registered users can log in and receive an httpOnly JWT cookie
+- [x] Logged-in users are redirected from `/login` and `/register` to `/dashboard`
+- [x] Unauthenticated users are redirected from `/(app)/*` routes to `/login?returnTo=...`
+- [x] After login, users are redirected to the `returnTo` URL (if relative) or `/dashboard`
+- [x] Users can log out (cookie cleared, redirected to `/`)
+- [x] Dashboard shows only the current user's sessions
+- [x] "New session" creates a session owned by the current user
+- [x] `session.resume` over WebSocket rejects sessions not owned by the current user
+- [x] WebSocket connections without a valid JWT cookie are rejected (code 4001)
+- [x] WebSocket 4001 close triggers redirect to `/login` (no infinite reconnect loop)
+- [x] Landing page renders at `/` with hero, how-it-works, features, pricing, CTA, footer
+- [x] Pricing section shows Free / Pro / Team; Free CTA → register, paid → "Coming Soon" modal
+- [x] Settings page shows profile (editable name), password change, current plan
+- [x] All existing REST endpoints (`/api/sessions`, `/api/styles`) are scoped to the current user
+- [x] Child resources (drafts, highlights, style samples) verified through parent ownership
+- [x] The `User.plan` field defaults to `Plan.FREE` on registration
 
 ### Non-Functional Requirements
 
-- [ ] Passwords hashed with Argon2id (via `pwdlib`), hashing runs in `to_thread()`
-- [ ] JWT secret loaded from `JWT_SECRET_KEY` env var; startup validates length >= 32
-- [ ] JWT claims include `sub`, `email`, `name`, `plan` for frontend local decode
-- [ ] No email enumeration via login responses (generic "Invalid credentials")
-- [ ] `returnTo` validated: must start with `/`, not `//`, no backslashes
-- [ ] Landing page is server-side rendered (SSR) for SEO
-- [ ] App pages are SPA (`ssr = false` at `(app)/+layout.ts`)
-- [ ] CORS origins loaded from `CORS_ORIGINS` environment variable
-- [ ] CSRF middleware validates Origin header on all POST/PUT/DELETE/PATCH requests
-- [ ] SQLite: WAL mode, foreign keys ON, busy_timeout 5000ms
-- [ ] All FKs have `ondelete="CASCADE"`
-- [ ] Email normalized to lowercase before storage
-- [ ] Schema version check on startup — auto-wipe stale DB
-- [ ] Backend API URLs from `$env/static/private` (server-side), `$env/static/public` (client-side)
+- [x] Passwords hashed with Argon2id (via `pwdlib`), hashing runs in `to_thread()`
+- [x] JWT secret loaded from `JWT_SECRET_KEY` env var; startup validates length >= 32
+- [x] JWT claims include `sub`, `email`, `name`, `plan` for frontend local decode
+- [x] No email enumeration via login responses (generic "Invalid credentials")
+- [x] `returnTo` validated: must start with `/`, not `//`, no backslashes
+- [x] Landing page is server-side rendered (SSR) for SEO
+- [x] App pages are SPA (`ssr = false` at `(app)/+layout.ts`)
+- [x] CORS origins loaded from `CORS_ORIGINS` environment variable
+- [x] CSRF middleware validates Origin header on all POST/PUT/DELETE/PATCH requests
+- [x] SQLite: WAL mode, foreign keys ON, busy_timeout 5000ms
+- [x] All FKs have `ondelete="CASCADE"`
+- [x] Email normalized to lowercase before storage
+- [x] Schema version check on startup — auto-wipe stale DB
+- [x] Backend API URLs from `$env/static/private` (server-side), `$env/static/public` (client-side)
 
 ### Quality Gates
 
-- [ ] `ruff check --fix && ruff format` passes
-- [ ] `pytest` passes (add tests for auth endpoints — register, login, logout, me)
-- [ ] `npm run check` passes (Svelte type checking)
-- [ ] All new backend endpoints have at least one happy-path test
+- [x] `ruff check --fix && ruff format` passes
+- [x] `pytest` passes (add tests for auth endpoints — register, login, logout, me)
+- [x] `npm run check` passes (Svelte type checking)
+- [x] All new backend endpoints have at least one happy-path test
 
 ## Dependencies & Prerequisites
 
