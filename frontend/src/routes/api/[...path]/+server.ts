@@ -6,10 +6,8 @@
  * forwards it to the backend.
  */
 
-import { env } from '$env/dynamic/private';
+import { INTERNAL_API_URL } from '$lib/server/config';
 import type { RequestHandler } from './$types';
-
-const INTERNAL_API_URL = env.INTERNAL_API_URL ?? 'http://localhost:8000';
 
 async function proxy(event: Parameters<RequestHandler>[0]): Promise<Response> {
 	const token = event.cookies.get('access_token');

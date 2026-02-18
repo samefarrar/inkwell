@@ -59,7 +59,7 @@ class SampleCreate(BaseModel):
 
 
 @router.get("")
-async def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """List user's writing styles."""
     with get_db() as db:
         styles = db.exec(
@@ -80,7 +80,7 @@ async def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, 
 
 
 @router.post("")
-async def create_style(
+def create_style(
     body: StyleCreate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Create a new writing style."""
@@ -107,9 +107,7 @@ def _get_user_style(db, style_id: int, user_id: int) -> WritingStyle:  # type: i
 
 
 @router.get("/{style_id}")
-async def get_style(
-    style_id: int, user: User = Depends(get_current_user)
-) -> dict[str, Any]:
+def get_style(style_id: int, user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Get a style with its samples."""
     with get_db() as db:
         style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
@@ -139,7 +137,7 @@ async def get_style(
 
 
 @router.put("/{style_id}")
-async def update_style(
+def update_style(
     style_id: int, body: StyleUpdate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Update a style's name or description."""
@@ -157,7 +155,7 @@ async def update_style(
 
 
 @router.delete("/{style_id}")
-async def delete_style(
+def delete_style(
     style_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, str]:
     """Delete a style and all its samples."""
@@ -175,7 +173,7 @@ async def delete_style(
 
 
 @router.post("/{style_id}/samples")
-async def add_sample(
+def add_sample(
     style_id: int, body: SampleCreate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Add a text sample to a style."""
@@ -273,7 +271,7 @@ async def upload_sample(
 
 
 @router.delete("/{style_id}/samples/{sample_id}")
-async def delete_sample(
+def delete_sample(
     style_id: int, sample_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, str]:
     """Delete a specific sample from a style."""

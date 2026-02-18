@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Return user's sessions with summary metadata, newest first."""
     with get_db() as db:
         stmt = (
@@ -53,7 +53,7 @@ async def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str
 
 
 @router.get("/latest")
-async def latest_session(user: User = Depends(get_current_user)) -> dict[str, Any]:
+def latest_session(user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Return the most recent session that has drafts."""
     with get_db() as db:
         session_ids_with_drafts = select(Draft.session_id).distinct()
@@ -122,7 +122,7 @@ async def latest_session(user: User = Depends(get_current_user)) -> dict[str, An
 
 
 @router.get("/{session_id}")
-async def get_session_detail(
+def get_session_detail(
     session_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Return full session detail: interview + drafts by round + highlights."""

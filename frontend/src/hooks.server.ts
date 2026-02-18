@@ -11,11 +11,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (token) {
 		try {
 			const { payload } = await jwtVerify(token, getSecret());
+			const sub = payload.sub;
+			const email = payload.email;
+			const name = payload.name;
+			const plan = payload.plan;
+			if (
+				typeof sub !== 'string' ||
+				typeof email !== 'string' ||
+				typeof name !== 'string' ||
+				typeof plan !== 'string'
+			) {
+				throw new Error('Invalid JWT claims');
+			}
 			event.locals.user = {
-				id: Number(payload.sub),
-				email: payload.email as string,
-				name: payload.name as string,
-				plan: payload.plan as User['plan']
+				id: Number(sub),
+				email,
+				name,
+				plan: plan as User['plan']
 			};
 		} catch {
 			event.locals.user = null;

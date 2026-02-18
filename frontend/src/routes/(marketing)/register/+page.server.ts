@@ -1,8 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { INTERNAL_API_URL } from '$lib/server/config';
 import type { Actions } from './$types';
-
-const INTERNAL_API_URL = env.INTERNAL_API_URL ?? 'http://localhost:8000';
 
 export const actions = {
 	default: async ({ request, cookies }) => {

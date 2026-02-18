@@ -4,5 +4,3 @@ export interface User {
 	name: string;
 	plan: 'free' | 'pro' | 'team';
 }
-
-export type UserPlan = User['plan'];

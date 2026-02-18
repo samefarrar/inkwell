@@ -10,7 +10,10 @@ class Feedback(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     session_id: int = Field(
         sa_column=Column(
-            Integer, ForeignKey("session.id", ondelete="CASCADE"), nullable=False
+            Integer,
+            ForeignKey("session.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
         )
     )
     draft_index: int | None = None

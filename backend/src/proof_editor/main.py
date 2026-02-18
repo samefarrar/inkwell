@@ -19,7 +19,7 @@ from proof_editor.api.auth import router as auth_router
 from proof_editor.api.sessions import router as sessions_router
 from proof_editor.api.styles import router as styles_router
 from proof_editor.api.voice import router as voice_router
-from proof_editor.auth_deps import JWT_ALGORITHM
+from proof_editor.auth_deps import JWT_ALGORITHM, _get_secret_key
 from proof_editor.db import create_tables
 from proof_editor.ws_types import (
     DraftEdit,
@@ -56,13 +56,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     env_path = Path(__file__).resolve().parents[3] / ".env"
     load_dotenv(env_path)
 
-    # Validate JWT secret
-    secret = os.environ.get("JWT_SECRET_KEY", "")
-    if len(secret) < 32:
-        raise RuntimeError(
-            "JWT_SECRET_KEY must be at least 32 characters. "
-            "Generate one with: openssl rand -hex 32"
-        )
+    # Validate JWT secret early (will raise RuntimeError if < 32 chars)
+    _get_secret_key()
 
     logging.basicConfig(level=logging.INFO, force=True)
     create_tables()
@@ -115,7 +110,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.close(code=4001, reason="Not authenticated")
         return
     try:
-        secret = os.environ.get("JWT_SECRET_KEY", "")
+        secret = _get_secret_key()
         payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
         user_id = int(payload["sub"])
     except (InvalidTokenError, KeyError, ValueError):

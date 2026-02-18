@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "proof_editor.db"
 
-SCHEMA_VERSION = 2  # Bump when models change
+SCHEMA_VERSION = 3  # Bump when models change
 
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 
