@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import func, select
 
 from proof_editor.auth_deps import get_current_user
-from proof_editor.db import get_db
+from proof_editor.db import db_session
 from proof_editor.models.draft import Draft
 from proof_editor.models.highlight import Highlight
 from proof_editor.models.interview_message import InterviewMessage
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 @router.get("")
 def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Return user's sessions with summary metadata, newest first."""
-    with get_db() as db:
+    with db_session() as db:
         stmt = (
             select(
                 Session.id,
@@ -55,7 +55,7 @@ def list_sessions(user: User = Depends(get_current_user)) -> list[dict[str, Any]
 @router.get("/latest")
 def latest_session(user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Return the most recent session that has drafts."""
-    with get_db() as db:
+    with db_session() as db:
         session_ids_with_drafts = select(Draft.session_id).distinct()
         stmt = (
             select(Session)
@@ -126,7 +126,7 @@ def get_session_detail(
     session_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Return full session detail: interview + drafts by round + highlights."""
-    with get_db() as db:
+    with db_session() as db:
         sess = db.get(Session, session_id)
         if not sess or sess.user_id != user.id:
             return {"found": False}

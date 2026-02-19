@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from proof_editor.auth_deps import JWT_ALGORITHM, _get_secret_key, get_current_user
-from proof_editor.db import get_db
+from proof_editor.db import db_session
 from proof_editor.models.user import User, UserCreate, UserRead
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -59,7 +59,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 async def register(body: UserCreate, response: Response) -> dict:
     """Create a new account and auto-login."""
     hashed = await to_thread(pwd_hash.hash, body.password)
-    with get_db() as db:
+    with db_session() as db:
         existing = db.exec(select(User).where(User.email == body.email)).first()
         if existing:
             raise HTTPException(status_code=409, detail="Email already registered")
@@ -79,7 +79,7 @@ async def register(body: UserCreate, response: Response) -> dict:
 @router.post("/login")
 async def login(body: LoginRequest, response: Response) -> dict:
     """Validate credentials and return JWT."""
-    with get_db() as db:
+    with db_session() as db:
         user = db.exec(
             select(User).where(User.email == body.email.strip().lower())
         ).first()

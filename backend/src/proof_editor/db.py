@@ -3,7 +3,6 @@
 import logging
 import sqlite3
 from collections.abc import Generator
-from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import event
@@ -63,14 +62,29 @@ def create_tables() -> None:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
-@contextmanager
 def get_db() -> Generator[Session, None, None]:
-    """Database session with guaranteed cleanup and rollback on error."""
-    session = Session(engine)
+    """Database session as FastAPI dependency: db: Session = Depends(get_db)."""
+    db = Session(engine)
     try:
-        yield session
+        yield db
     except Exception:
-        session.rollback()
+        db.rollback()
         raise
     finally:
-        session.close()
+        db.close()
+
+
+class db_session:
+    """Context manager for manual DB usage (outside FastAPI dependencies).
+
+    Usage: with db_session() as db: ...
+    """
+
+    def __enter__(self) -> Session:
+        self._session = Session(engine)
+        return self._session
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[no-untyped-def]
+        if exc_type is not None:
+            self._session.rollback()
+        self._session.close()

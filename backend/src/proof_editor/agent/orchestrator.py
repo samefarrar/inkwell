@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from proof_editor.db import get_db
+from proof_editor.db import db_session
 from proof_editor.ws_types import (
     DraftHighlight,
     DraftSynthesize,
@@ -75,7 +75,7 @@ class Orchestrator:
 
         from proof_editor.models.interview_message import InterviewMessage
 
-        with get_db() as db:
+        with db_session() as db:
             msg = InterviewMessage(
                 session_id=self.session_id,
                 role=role,
@@ -105,7 +105,7 @@ class Orchestrator:
         self.synthesis_round = 0
 
         # Create DB session
-        with get_db() as db:
+        with db_session() as db:
             session = Session(
                 task_type=msg.task_type,
                 topic=msg.topic,
@@ -165,10 +165,9 @@ class Orchestrator:
         if self.session_id:
             import json as _json
 
-            from proof_editor.db import get_db as _get_db
             from proof_editor.models.session import Session as _Session
 
-            with _get_db() as db:
+            with db_session() as db:
                 sess = db.get(_Session, self.session_id)
                 if sess:
                     sess.interview_summary = self.interview_summary
@@ -199,7 +198,7 @@ class Orchestrator:
         from proof_editor.models.draft import Draft
         from proof_editor.models.session import Session as _Session
 
-        with get_db() as db:
+        with db_session() as db:
             for i, d in enumerate(self.drafts):
                 draft = Draft(
                     session_id=self.session_id,
@@ -247,7 +246,7 @@ class Orchestrator:
         if self.session_id:
             from proof_editor.models.highlight import Highlight
 
-            with get_db() as db:
+            with db_session() as db:
                 highlight = Highlight(
                     session_id=self.session_id,
                     draft_index=msg.draft_index,
@@ -286,7 +285,7 @@ class Orchestrator:
 
             from proof_editor.models.highlight import Highlight
 
-            with get_db() as db:
+            with db_session() as db:
                 stmt = (
                     select(Highlight)
                     .where(Highlight.session_id == self.session_id)
@@ -323,7 +322,7 @@ class Orchestrator:
 
             from proof_editor.models.highlight import Highlight
 
-            with get_db() as db:
+            with db_session() as db:
                 stmt = (
                     select(Highlight)
                     .where(Highlight.session_id == self.session_id)
@@ -398,13 +397,12 @@ class Orchestrator:
 
         from sqlmodel import func, select
 
-        from proof_editor.db import get_db as _get_db
         from proof_editor.models.draft import Draft
         from proof_editor.models.highlight import Highlight
         from proof_editor.models.interview_message import InterviewMessage
         from proof_editor.models.session import Session as _Session
 
-        with _get_db() as db:
+        with db_session() as db:
             sess = db.get(_Session, session_id)
             if not sess or sess.user_id != self.user_id:
                 await self.send(ErrorMessage(message="Session not found"))

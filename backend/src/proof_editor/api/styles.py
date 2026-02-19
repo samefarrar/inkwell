@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import select
 
 from proof_editor.auth_deps import get_current_user
-from proof_editor.db import get_db
+from proof_editor.db import db_session
 from proof_editor.models.style import StyleSample, WritingStyle
 from proof_editor.models.user import User
 from proof_editor.storage import upload_to_gcs
@@ -61,7 +61,7 @@ class SampleCreate(BaseModel):
 @router.get("")
 def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """List user's writing styles."""
-    with get_db() as db:
+    with db_session() as db:
         styles = db.exec(
             select(WritingStyle)
             .where(WritingStyle.user_id == user.id)
@@ -84,7 +84,7 @@ def create_style(
     body: StyleCreate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Create a new writing style."""
-    with get_db() as db:
+    with db_session() as db:
         style = WritingStyle(
             name=body.name, description=body.description, user_id=user.id
         )
@@ -109,7 +109,7 @@ def _get_user_style(db, style_id: int, user_id: int) -> WritingStyle:  # type: i
 @router.get("/{style_id}")
 def get_style(style_id: int, user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Get a style with its samples."""
-    with get_db() as db:
+    with db_session() as db:
         style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         samples = db.exec(
@@ -141,7 +141,7 @@ def update_style(
     style_id: int, body: StyleUpdate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Update a style's name or description."""
-    with get_db() as db:
+    with db_session() as db:
         style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         if body.name is not None:
@@ -159,7 +159,7 @@ def delete_style(
     style_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, str]:
     """Delete a style and all its samples."""
-    with get_db() as db:
+    with db_session() as db:
         style = _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         samples = db.exec(
@@ -177,7 +177,7 @@ def add_sample(
     style_id: int, body: SampleCreate, user: User = Depends(get_current_user)
 ) -> dict[str, Any]:
     """Add a text sample to a style."""
-    with get_db() as db:
+    with db_session() as db:
         _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         word_count = len(body.content.split())
@@ -248,7 +248,7 @@ async def upload_sample(
     word_count = len(text.split())
     title = PurePosixPath(safe_name).stem
 
-    with get_db() as db:
+    with db_session() as db:
         _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         sample = StyleSample(
@@ -275,7 +275,7 @@ def delete_sample(
     style_id: int, sample_id: int, user: User = Depends(get_current_user)
 ) -> dict[str, str]:
     """Delete a specific sample from a style."""
-    with get_db() as db:
+    with db_session() as db:
         _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
 
         sample = db.get(StyleSample, sample_id)
