@@ -70,6 +70,7 @@ export class WebSocketClient {
   private reconnectDelay = 1000;
   private shouldReconnect = true;
   private _connected = $state(false);
+  private pendingSends: ClientMessage[] = [];
 
   get connected(): boolean {
     return this._connected;
@@ -84,6 +85,11 @@ export class WebSocketClient {
       this._connected = true;
       this.reconnectDelay = 1000;
       console.log('[WS] Connected');
+      // Flush any messages queued before connection opened
+      for (const msg of this.pendingSends) {
+        this.ws!.send(JSON.stringify(msg));
+      }
+      this.pendingSends = [];
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
@@ -123,7 +129,8 @@ export class WebSocketClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {
-      console.warn('[WS] Not connected, cannot send:', msg.type);
+      // Queue messages to be sent when connection opens
+      this.pendingSends.push(msg);
     }
   }
 
