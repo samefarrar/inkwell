@@ -5,7 +5,10 @@ import os
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from proof_editor.auth_deps import get_current_user
+from proof_editor.models.user import User
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
@@ -18,7 +21,9 @@ TOKEN_LIFETIME_SECONDS = 60
 
 
 @router.get("/token")
-async def create_voice_token() -> dict[str, str]:
+async def create_voice_token(
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
     """Generate a temporary AssemblyAI token (60s lifetime, rate-limited)."""
     global _last_token_time
 

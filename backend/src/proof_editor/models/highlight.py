@@ -2,12 +2,20 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
 
 
 class Highlight(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="session.id", index=True)
+    session_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("session.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
     draft_index: int
     start: int
     end: int

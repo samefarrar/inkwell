@@ -1,6 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { styles } from '$lib/stores/styles.svelte';
-  import { session } from '$lib/stores/session.svelte';
 
   let showCreate = $state(false);
   let newName = $state('');
@@ -13,13 +13,12 @@
       newName = '';
       newDesc = '';
       showCreate = false;
-      openStyle(style.id);
+      goto(`/styles/${style.id}`);
     }
   }
 
   function openStyle(id: number) {
-    styles.loadStyle(id);
-    session.setAppView('style_editor');
+    goto(`/styles/${id}`);
   }
 
   function formatDate(iso: string): string {

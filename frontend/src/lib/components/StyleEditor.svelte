@@ -1,6 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { styles } from '$lib/stores/styles.svelte';
-  import { session } from '$lib/stores/session.svelte';
 
   let editingName = $state(false);
   let editingDesc = $state(false);
@@ -17,7 +17,7 @@
 
   function goBack() {
     styles.clearCurrent();
-    session.setAppView('styles');
+    goto('/styles');
   }
 
   function startEditName() {
