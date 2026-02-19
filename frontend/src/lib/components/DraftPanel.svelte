@@ -268,26 +268,15 @@
               class="hl hl-{seg.sentiment}"
               onmouseenter={() => (hoveredHighlight = seg.highlightIndex!)}
               onmouseleave={() => (hoveredHighlight = null)}
-            >
-              {#if seg.label}
-                <span class="hl-label">{seg.label}</span>
-              {/if}
-              {seg.text}
-              {#if hoveredHighlight === seg.highlightIndex}
-                <span class="hl-controls">
-                  <button
+            >{#if seg.label}<span class="hl-label">{seg.label}</span>{/if}{seg.text}{#if hoveredHighlight === seg.highlightIndex}<span class="hl-controls"><button
                     class="hl-ctrl-btn"
                     title="Set label"
                     onclick={(e) => openLabelPopover(seg.highlightIndex!, e)}
-                  >&#9881;</button>
-                  <button
+                  >&#9881;</button><button
                     class="hl-ctrl-btn remove"
                     title="Remove highlight"
                     onclick={() => handleRemove(seg.highlightIndex!)}
-                  >&#10005;</button>
-                </span>
-              {/if}
-            </span>
+                  >&#10005;</button></span>{/if}</span>
           {:else}{seg.text}{/if}
         {/each}
       </div>
@@ -511,6 +500,16 @@
     margin-bottom: 2px;
     animation: popIn 0.1s ease-out;
     z-index: 5;
+  }
+
+  /* Invisible bridge between controls and highlight text so mouseleave doesn't fire in the gap */
+  .hl-controls::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: -4px;
+    right: -4px;
+    height: 10px;
   }
 
   .hl-ctrl-btn {

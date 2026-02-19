@@ -38,7 +38,12 @@ logger = logging.getLogger(__name__)
 
 def _get_allowed_origins() -> set[str]:
     """Build allowed origins from env var + dev defaults."""
-    origins = {"http://localhost:5173", "http://localhost:4173"}
+    origins = {
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "http://localhost:8323",
+        "http://65.109.63.226:8323",
+    }
     extra = os.environ.get("CORS_ORIGINS", "")
     if extra:
         origins.update(o.strip() for o in extra.split(",") if o.strip())
@@ -191,8 +196,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(
         "proof_editor.main:app",
-        host="127.0.0.1",
-        port=8000,
+        host="0.0.0.0",
+        port=8322,
         reload=True,
     )
 
