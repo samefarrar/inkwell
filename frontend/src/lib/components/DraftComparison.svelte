@@ -1,6 +1,7 @@
 <script lang="ts">
   import { drafts } from '$lib/stores/drafts.svelte';
   import { session } from '$lib/stores/session.svelte';
+  import { focus } from '$lib/stores/focus.svelte';
   import { ws } from '$lib/ws.svelte';
   import DraftPanel from './DraftPanel.svelte';
 
@@ -52,7 +53,9 @@
   }
 
   function handleFocus(draftIndex: number) {
-    // Future: transition to focused editing mode
+    const draft = drafts.drafts[draftIndex];
+    if (!draft) return;
+    focus.enterFocus(draftIndex, draft.content);
     session.goToFocus();
   }
 

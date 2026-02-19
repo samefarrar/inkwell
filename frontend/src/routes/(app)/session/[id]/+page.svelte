@@ -6,6 +6,7 @@
 	import { setupWsHandler, hydrateSessionFromApi } from '$lib/ws-handler';
 	import Interview from '$lib/components/Interview.svelte';
 	import DraftComparison from '$lib/components/DraftComparison.svelte';
+	import FocusEditor from '$lib/components/FocusEditor.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -33,9 +34,7 @@
 		{:else if session.screen === 'drafts'}
 			<DraftComparison />
 		{:else if session.screen === 'focus'}
-			<div class="placeholder">
-				<p>Focus editing mode coming soon.</p>
-			</div>
+			<FocusEditor />
 		{:else}
 			<div class="placeholder">
 				<p>Loading session...</p>

@@ -1,6 +1,7 @@
 """Feedback model — tracks accepted/rejected style suggestions."""
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, SQLModel
@@ -21,4 +22,6 @@ class Feedback(SQLModel, table=True):
     replacement: str | None = None
     accepted: bool
     rule_id: str | None = None
+    action: Literal["accept", "reject", "dismiss"] | None = None
+    feedback_type: Literal["suggestion", "comment"] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
