@@ -33,10 +33,11 @@ class Orchestrator:
     def __init__(self, websocket: WebSocket, user_id: int) -> None:
         self.ws = websocket
         self.user_id = user_id
-        self.state = "idle"  # idle, interview, drafting, highlighting, focused
+        self.state = "idle"  # idle, interview, outline, drafting, highlighting, focused
         self.session_id: int | None = None
         self.task_type: str = ""
         self.topic: str = ""
+        self.style_id: int | None = None
         self.conversation_history: list[dict[str, Any]] = []
         self.drafts: list[dict[str, Any]] = []
         self.highlights: list[dict[str, Any]] = []
@@ -103,6 +104,7 @@ class Orchestrator:
 
         self.task_type = msg.task_type
         self.topic = msg.topic
+        self.style_id = msg.style_id
         self.conversation_history = []
         self.drafts = []
         self.highlights = []
@@ -115,6 +117,7 @@ class Orchestrator:
                 topic=msg.topic,
                 status="interview",
                 user_id=self.user_id,
+                style_id=self.style_id,
             )
             db.add(session)
             db.commit()
@@ -158,17 +161,103 @@ class Orchestrator:
         if result.get("ready_to_draft"):
             self.interview_summary = result.get("summary", "")
             self.key_material = result.get("key_material", [])
-            self.state = "drafting"
-            await self._start_drafting()
+            await self._start_outline()
 
-    async def _start_drafting(self) -> None:
+    async def _start_outline(self) -> None:
+        """Transition to outline state — generate structural nodes for user review."""
+        from proof_editor.learning.outline_generator import generate_outline
+        from proof_editor.ws_types import OutlineNodeData, OutlineNodesMessage
+
+        self.state = "outline"
+
+        # Pull structural signature from voice profile if available
+        structural_signature = ""
+        if self.style_id:
+            from proof_editor.learning import load_voice_profile
+
+            profile = load_voice_profile(self.user_id, self.style_id)
+            if profile:
+                structural_signature = profile.get("structural_signature", "")
+
+        await self.send(StatusMessage(message="Building your outline..."))
+
+        nodes = await generate_outline(
+            task_type=self.task_type,
+            topic=self.topic,
+            interview_summary=self.interview_summary,
+            key_material=self.key_material,
+            structural_signature=structural_signature,
+        )
+
+        await self.send(
+            OutlineNodesMessage(nodes=[OutlineNodeData(**n) for n in nodes])
+        )
+
+    async def handle_outline_confirm(self, msg: Any) -> None:
+        """User confirmed (possibly reordered) outline — proceed to drafting."""
+        if self.state != "outline":
+            await self.send(ErrorMessage(message="Not in outline state"))
+            return
+
+        from proof_editor.ws_types import OutlineConfirm
+
+        confirmed: OutlineConfirm = msg
+        outline_dicts = [n.model_dump() for n in confirmed.nodes]
+        self.state = "drafting"
+        await self._start_drafting(outline=outline_dicts)
+
+    async def handle_outline_skip(self) -> None:
+        """User skipped the outline step — draft immediately with no structure."""
+        if self.state != "outline":
+            await self.send(ErrorMessage(message="Not in outline state"))
+            return
+
+        self.state = "drafting"
+        await self._start_drafting()
+
+    def _load_examples_context(self) -> str:
+        """Load writing style samples or fall back to static inspo examples."""
+        if self.style_id:
+            from sqlmodel import select
+
+            from proof_editor.learning import format_samples_for_prompt
+            from proof_editor.models.style import StyleSample
+
+            with db_session() as db:
+                samples = db.exec(
+                    select(StyleSample).where(StyleSample.style_id == self.style_id)
+                ).all()
+
+            ctx = format_samples_for_prompt(samples)
+            if ctx:
+                # Prepend voice profile summary if one has been analyzed
+                from proof_editor.learning import (
+                    format_voice_profile_for_prompt,
+                    load_voice_profile,
+                )
+
+                profile = load_voice_profile(self.user_id, self.style_id)
+                if profile:
+                    ctx = format_voice_profile_for_prompt(profile) + "\n\n" + ctx
+                return ctx
+
+        from proof_editor.examples.loader import (
+            format_examples_for_prompt,
+            load_examples,
+        )
+
+        return format_examples_for_prompt(load_examples())
+
+    async def _start_drafting(
+        self, outline: list[dict[str, Any]] | None = None
+    ) -> None:
         """Transition to drafting — generate 3 concurrent drafts."""
+        import json as _json
+
         from proof_editor.drafting.generator import DraftGenerator
 
         # Persist interview summary + key material to session
         if self.session_id:
-            import json as _json
-
             from proof_editor.models.session import Session as _Session
 
             with db_session() as db:
@@ -177,9 +266,13 @@ class Orchestrator:
                     sess.interview_summary = self.interview_summary
                     sess.key_material = _json.dumps(self.key_material)
                     sess.status = "drafting"
+                    if outline is not None:
+                        sess.outline = _json.dumps(outline)
                     db.commit()
 
         await self.send(StatusMessage(message="Developing your drafts..."))
+
+        examples_context = self._load_examples_context()
 
         self._generator = DraftGenerator(
             task_type=self.task_type,
@@ -187,6 +280,8 @@ class Orchestrator:
             interview_summary=self.interview_summary,
             key_material=self.key_material,
             websocket=self.ws,
+            examples_context=examples_context,
+            outline=outline or [],
         )
 
         drafts = await self._generator.generate()
@@ -360,10 +455,6 @@ class Orchestrator:
             return
 
         from proof_editor.drafting.synthesizer import DraftSynthesizer
-        from proof_editor.examples.loader import (
-            format_examples_for_prompt,
-            load_examples,
-        )
 
         self.state = "drafting"
         self.synthesis_round += 1
@@ -372,8 +463,7 @@ class Orchestrator:
             StatusMessage(message=f"Synthesizing round {self.synthesis_round}...")
         )
 
-        examples = load_examples()
-        examples_context = format_examples_for_prompt(examples)
+        examples_context = self._load_examples_context()
 
         synthesizer = DraftSynthesizer(
             task_type=self.task_type,
@@ -495,6 +585,41 @@ class Orchestrator:
         if self._focus_handler is not None:
             self._focus_handler.cancel()
 
+        # Record which draft the user selected
+        if self.session_id:
+            from proof_editor.models.session import Session as _Session
+
+            with db_session() as db:
+                sess = db.get(_Session, self.session_id)
+                if sess:
+                    sess.selected_draft_index = msg.draft_index
+                    db.commit()
+
+        # Build voice profile context for editorial comments
+        voice_profile_context = ""
+        if self.style_id:
+            from proof_editor.learning import (
+                format_voice_profile_for_prompt,
+                load_voice_profile,
+            )
+            from proof_editor.learning.feedback_distiller import (
+                format_rule_stats_for_prompt,
+                load_rule_stats,
+            )
+
+            profile = load_voice_profile(self.user_id, self.style_id)
+            if profile:
+                voice_profile_context = format_voice_profile_for_prompt(profile)
+
+            rule_stats = load_rule_stats(self.user_id, self.style_id)
+            rule_context = format_rule_stats_for_prompt(rule_stats)
+            if rule_context:
+                voice_profile_context = (
+                    voice_profile_context + "\n\n" + rule_context
+                    if voice_profile_context
+                    else rule_context
+                )
+
         self.state = "focused"
         self._focus_handler = FocusHandler(
             send=self.send,
@@ -502,6 +627,7 @@ class Orchestrator:
             drafts=self.drafts,
             interview_summary=self.interview_summary,
             key_material=self.key_material,
+            voice_profile_context=voice_profile_context,
         )
         await self._focus_handler.handle_enter(msg)
 
@@ -510,6 +636,21 @@ class Orchestrator:
         self.state = "highlighting"
         self._focus_handler = None
         logger.info("Exited focus mode")
+
+        # Fire-and-forget: distill session feedback into rule stats
+        if self.style_id and self.session_id:
+            from proof_editor.learning.feedback_distiller import (
+                distill_session_feedback,
+            )
+
+            task = asyncio.get_event_loop().run_in_executor(
+                None,
+                distill_session_feedback,
+                self.user_id,
+                self.style_id,
+                self.session_id,
+            )
+            asyncio.ensure_future(task)
 
     async def handle_focus_feedback(self, msg: FocusFeedbackMsg) -> None:
         """Handle feedback on a suggestion or comment."""
@@ -523,3 +664,9 @@ class Orchestrator:
             await self.send(ErrorMessage(message="Not in focus mode"))
             return
         await self._focus_handler.handle_chat(msg)
+
+    async def handle_focus_approve_comment(self, msg: Any) -> None:
+        """Handle approve comment — ask LLM to apply the editorial suggestion."""
+        if self.state != "focused" or not self._focus_handler:
+            return
+        await self._focus_handler.handle_approve_comment(msg)

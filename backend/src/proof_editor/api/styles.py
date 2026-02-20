@@ -270,6 +270,55 @@ async def upload_sample(
         }
 
 
+@router.post("/{style_id}/analyze")
+async def analyze_style(
+    style_id: int, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
+    """Run 'What do you notice?' LLM analysis on all samples for this style.
+
+    Extracts a structured voice profile and stores it in the Preference table.
+    Returns the extracted profile.
+    """
+    from proof_editor.learning import save_voice_profile
+    from proof_editor.learning.pattern_extractor import extract_patterns
+
+    with db_session() as db:
+        _get_user_style(db, style_id, user.id)  # type: ignore[arg-type]
+        samples = db.exec(
+            select(StyleSample).where(StyleSample.style_id == style_id)
+        ).all()
+
+    if not samples:
+        raise HTTPException(400, "Add at least one writing sample before analyzing")
+
+    profile = await extract_patterns(samples)
+    if not profile:
+        raise HTTPException(500, "Analysis failed — please try again")
+
+    save_voice_profile(user.id, style_id, profile)  # type: ignore[arg-type]
+    return profile
+
+
+@router.get("/{style_id}/voice_profile")
+def get_voice_profile(
+    style_id: int, user: User = Depends(get_current_user)
+) -> dict[str, Any]:
+    """Return the stored voice profile for this style, or 404 if not analyzed yet."""
+    from proof_editor.learning import load_voice_profile
+
+    _get_user_style_by_id(style_id, user.id)  # type: ignore[arg-type]
+    profile = load_voice_profile(user.id, style_id)  # type: ignore[arg-type]
+    if not profile:
+        raise HTTPException(404, "No voice profile yet — run /analyze first")
+    return profile
+
+
+def _get_user_style_by_id(style_id: int, user_id: int) -> None:
+    """Verify style ownership without keeping a DB session open."""
+    with db_session() as db:
+        _get_user_style(db, style_id, user_id)
+
+
 @router.delete("/{style_id}/samples/{sample_id}")
 def delete_sample(
     style_id: int, sample_id: int, user: User = Depends(get_current_user)

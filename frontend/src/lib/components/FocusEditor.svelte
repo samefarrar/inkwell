@@ -6,6 +6,8 @@
 	import FocusTipTap from './FocusTipTap.svelte';
 	import FocusSidebar from './FocusSidebar.svelte';
 
+	let tiptap: FocusTipTap;
+
 	function handleBack() {
 		ws.send({ type: 'focus.exit' });
 		focus.leaveFocus();
@@ -31,7 +33,7 @@
 
 	<div class="panels">
 		<div class="editor-panel">
-			<FocusTipTap />
+			<FocusTipTap bind:this={tiptap} />
 		</div>
 		<div class="sidebar-panel">
 			<FocusSidebar />

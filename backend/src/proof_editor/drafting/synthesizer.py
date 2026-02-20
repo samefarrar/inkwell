@@ -7,6 +7,7 @@ all highlights embedded as semantic XML tags.
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from fastapi import WebSocket
@@ -15,6 +16,8 @@ from proof_editor.drafting.prompts import ANGLE_INSTRUCTIONS, get_angles
 from proof_editor.ws_types import DraftChunk, DraftComplete, DraftStart
 
 logger = logging.getLogger(__name__)
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def annotate_draft_with_highlights(
@@ -175,6 +178,7 @@ INSTRUCTIONS:
   * Em dash (—) with no spaces, max twice per paragraph
   * Active voice preferred
   * Cut filler words: "actually", "very", "just", "really"
+- Do not use HTML tags or formatting. Output plain text only.
 - Make it better than the previous round
 - Include a title
 
@@ -289,14 +293,16 @@ class DraftSynthesizer:
             async for chunk in response:
                 delta = chunk.choices[0].delta
                 if delta.content:
-                    full_content += delta.content
-                    await self.ws.send_text(
-                        DraftChunk(
-                            draft_index=draft_index,
-                            content=delta.content,
-                            done=False,
-                        ).model_dump_json()
-                    )
+                    clean = _HTML_TAG_RE.sub("", delta.content)
+                    if clean:
+                        full_content += clean
+                        await self.ws.send_text(
+                            DraftChunk(
+                                draft_index=draft_index,
+                                content=clean,
+                                done=False,
+                            ).model_dump_json()
+                        )
 
         except Exception as e:
             logger.error("Synthesis draft %d LLM error: %s", draft_index, e)

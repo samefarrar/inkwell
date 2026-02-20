@@ -22,15 +22,27 @@ class EditorialComment:
     comment: str
 
 
-SYSTEM_PROMPT = """\
-You are a senior editor reviewing a draft. Leave 3-5 editorial comments \
-focused on structure, clarity, voice, and impact — NOT grammar or spelling.
+_BASE_SYSTEM_PROMPT = """\
+You are a senior editor reviewing a draft.{voice_section} Leave 3-5 editorial \
+comments focused on structure, clarity, voice, and impact — NOT grammar or spelling.
 
 Each comment should be anchored to a specific quote from the draft. \
 Pick the most important improvements the writer should consider.
 
 You MUST use the `leave_comment` tool for each comment. Do not respond \
 with plain text — only use the tool."""
+
+
+def _build_system_prompt(voice_profile_context: str) -> str:
+    if voice_profile_context:
+        voice_section = (
+            f"\n\nYou know this writer's style well:\n{voice_profile_context}\n\n"
+            "Tailor your feedback to their specific voice and known weaknesses."
+        )
+    else:
+        voice_section = ""
+    return _BASE_SYSTEM_PROMPT.format(voice_section=voice_section)
+
 
 TOOLS = [
     {
@@ -78,6 +90,7 @@ def _find_quote_position(text: str, quote: str) -> tuple[int, int]:
 async def generate_comments(
     text: str,
     interview_context: str = "",
+    voice_profile_context: str = "",
 ) -> list[EditorialComment]:
     """Generate editorial comments for the given text.
 
@@ -85,17 +98,15 @@ async def generate_comments(
     """
     from litellm import acompletion
 
+    system_prompt = _build_system_prompt(voice_profile_context)
+
+    user_content = f"Here is the draft to review:\n\n{text}"
+    if interview_context:
+        user_content += f"\n\nContext from the interview:\n{interview_context}"
+
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": f"Here is the draft to review:\n\n{text}"
-            + (
-                f"\n\nContext from the interview:\n{interview_context}"
-                if interview_context
-                else ""
-            ),
-        },
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
     ]
 
     try:

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { session, type SessionSummary } from '$lib/stores/session.svelte';
   import { styles } from '$lib/stores/styles.svelte';
   import { ws } from '$lib/ws.svelte';
@@ -18,7 +19,6 @@
 
   function handleSessionClick(s: SessionSummary) {
     if (s.id === session.currentSessionId) return;
-    // Debounce rapid switching (200ms)
     if (switchDebounce) clearTimeout(switchDebounce);
     switchDebounce = setTimeout(() => {
       ws.send({ type: 'session.cancel' });
@@ -30,6 +30,11 @@
   function handleNewSession() {
     ws.send({ type: 'session.cancel' });
     onNewSession();
+  }
+
+  async function handleNewStyle() {
+    const style = await styles.createStyle('New style', '');
+    if (style) goto(`/styles/${style.id}`);
   }
 
   function relativeDate(iso: string): string {
@@ -60,10 +65,6 @@
     <span class="sidebar-logo">Inkwell</span>
   </div>
 
-  <button class="new-session-btn" onclick={handleNewSession}>
-    <span class="plus">+</span> New session
-  </button>
-
   <nav class="sidebar-nav">
     <button
       class="nav-item"
@@ -74,7 +75,7 @@
     </button>
     <button
       class="nav-item"
-      class:active={session.appView === 'styles'}
+      class:active={session.appView === 'styles' || session.appView === 'style_editor'}
       onclick={() => session.setAppView('styles')}
     >
       Styles
@@ -84,6 +85,7 @@
   <div class="sidebar-content">
     {#if session.appView === 'session'}
       <div class="section-label">HISTORY</div>
+      <button class="action-btn" onclick={handleNewSession}>+ New session</button>
       {#if session.sessionsLoading}
         <div class="skeleton-list">
           {#each Array(4) as _}
@@ -119,6 +121,7 @@
       {/if}
     {:else if session.appView === 'styles' || session.appView === 'style_editor'}
       <div class="section-label">WRITING STYLES</div>
+      <button class="action-btn" onclick={handleNewStyle}>+ New style</button>
       {#if styles.loading}
         <div class="skeleton-list">
           {#each Array(3) as _}
@@ -135,10 +138,7 @@
             <button
               class="session-item"
               class:active={styles.currentStyle?.id === style.id}
-              onclick={() => {
-                styles.loadStyle(style.id);
-                session.setAppView('style_editor');
-              }}
+              onclick={() => goto(`/styles/${style.id}`)}
             >
               <span class="session-topic">{style.name}</span>
               {#if style.description}
@@ -154,16 +154,14 @@
 
 <style>
   .sidebar {
-    width: 240px;
-    min-width: 240px;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: #16161a;
     background-image: linear-gradient(
       180deg,
       rgba(232, 115, 58, 0.03) 0%,
       transparent 120px
     );
-    border-right: 1px solid var(--chrome-border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -181,34 +179,6 @@
     font-size: 22px;
     color: var(--chrome-text);
     letter-spacing: -0.01em;
-  }
-
-  .new-session-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    margin: 4px 8px 8px;
-    color: var(--accent);
-    font-family: 'Outfit', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    width: calc(100% - 16px);
-    text-align: left;
-    transition: background 0.2s;
-  }
-
-  .new-session-btn:hover {
-    background: rgba(232, 115, 58, 0.08);
-  }
-
-  .plus {
-    font-size: 16px;
-    line-height: 1;
   }
 
   .sidebar-nav {
@@ -257,6 +227,29 @@
     letter-spacing: 0.06em;
     color: var(--chrome-text-muted);
     padding: 8px 8px 6px;
+  }
+
+  .action-btn {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+
+  .action-btn:hover {
+    background: rgba(232, 115, 58, 0.06);
+    border-left-color: rgba(232, 115, 58, 0.3);
   }
 
   .session-list {
@@ -351,5 +344,4 @@
     0%, 100% { opacity: 0.4; }
     50% { opacity: 0.8; }
   }
-
 </style>

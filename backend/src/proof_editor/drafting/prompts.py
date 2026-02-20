@@ -27,7 +27,7 @@ KEY DETAILS:
 {key_material}
 
 {examples_context}
-
+{outline_context}
 INSTRUCTIONS:
 - Write in the {angle} style: {angle_instruction}
 - Target 300-500 words
@@ -38,6 +38,7 @@ INSTRUCTIONS:
   * Active voice preferred
   * Numbers: spell out 1-9, numerals for 10+
   * Cut filler words: "actually", "very", "just", "really"
+- Do not use HTML tags or formatting. Output plain text only.
 - Make it compelling and publication-ready
 - Include a title
 
@@ -111,6 +112,18 @@ def get_angles(task_type: str) -> list[str]:
     return ANGLE_MAP.get(task_type, ANGLE_MAP["essay"])
 
 
+def _format_outline_context(outline: list[dict[str, str]]) -> str:
+    """Format outline nodes as a numbered structure instruction."""
+    if not outline:
+        return ""
+    lines = ["STRUCTURE (follow this order):"]
+    for i, node in enumerate(outline, 1):
+        node_type = node.get("node_type", "section").replace("_", " ").title()
+        description = node.get("description", "")
+        lines.append(f"{i}. {node_type}: {description}")
+    return "\n".join(lines) + "\n"
+
+
 def build_draft_prompt(
     task_type: str,
     topic: str,
@@ -118,10 +131,12 @@ def build_draft_prompt(
     interview_summary: str,
     key_material: list[str],
     examples_context: str,
+    outline: list[dict[str, str]] | None = None,
 ) -> str:
     """Build the full prompt for a single draft."""
     angle_instruction = ANGLE_INSTRUCTIONS.get(angle, "Write naturally.")
     key_material_str = "\n".join(f"- {item}" for item in key_material)
+    outline_context = _format_outline_context(outline or [])
 
     return DRAFT_SYSTEM_PROMPT.format(
         task_type=task_type,
@@ -130,5 +145,6 @@ def build_draft_prompt(
         interview_summary=interview_summary,
         key_material=key_material_str,
         examples_context=examples_context,
+        outline_context=outline_context,
         angle_instruction=angle_instruction,
     )

@@ -82,6 +82,27 @@ class FocusFeedbackMsg(BaseModel):
     feedback_type: Literal["suggestion", "comment"]
 
 
+class FocusApproveComment(BaseModel):
+    type: Literal["focus.approve_comment"] = "focus.approve_comment"
+    id: str
+    current_content: str  # current editor HTML so backend can work with latest text
+
+
+class OutlineNodeData(BaseModel):
+    id: str
+    node_type: str
+    description: str
+
+
+class OutlineConfirm(BaseModel):
+    type: Literal["outline.confirm"] = "outline.confirm"
+    nodes: list[OutlineNodeData]
+
+
+class OutlineSkip(BaseModel):
+    type: Literal["outline.skip"] = "outline.skip"
+
+
 # --- Server → Client ---
 
 
@@ -173,6 +194,18 @@ class FocusChatResponse(BaseModel):
     done: bool
 
 
+class FocusEditApplied(BaseModel):
+    type: Literal["focus.edit"] = "focus.edit"
+    comment_id: str
+    old_text: str
+    new_text: str
+
+
+class OutlineNodesMessage(BaseModel):
+    type: Literal["outline.nodes"] = "outline.nodes"
+    nodes: list[OutlineNodeData]
+
+
 # Discriminated union for parsing incoming messages
 ClientMessage = (
     TaskSelect
@@ -188,6 +221,9 @@ ClientMessage = (
     | FocusExit
     | FocusChat
     | FocusFeedbackMsg
+    | FocusApproveComment
+    | OutlineConfirm
+    | OutlineSkip
 )
 
 ServerMessage = (
@@ -204,4 +240,6 @@ ServerMessage = (
     | FocusSuggestion
     | FocusCommentMsg
     | FocusChatResponse
+    | FocusEditApplied
+    | OutlineNodesMessage
 )

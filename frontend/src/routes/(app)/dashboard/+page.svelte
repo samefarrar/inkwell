@@ -1,204 +1,175 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { session } from '$lib/stores/session.svelte';
+	import { drafts } from '$lib/stores/drafts.svelte';
+	import { setupWsHandler } from '$lib/ws-handler';
+	import TaskSelector from '$lib/components/TaskSelector.svelte';
+	import Interview from '$lib/components/Interview.svelte';
+	import DraftComparison from '$lib/components/DraftComparison.svelte';
+	import FocusEditor from '$lib/components/FocusEditor.svelte';
+	import OutlineScreen from '$lib/components/OutlineScreen.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
+	let cleanup: (() => void) | undefined;
+
+	onMount(() => {
+		session.reset();
+		drafts.reset();
+		cleanup = setupWsHandler();
+	});
+
+	onDestroy(() => {
+		cleanup?.();
+	});
+
+	function relativeDate(iso: string): string {
+		const d = new Date(iso);
+		const now = new Date();
+		const diff = now.getTime() - d.getTime();
+		const mins = Math.floor(diff / 60000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins}m ago`;
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours}h ago`;
+		const days = Math.floor(hours / 24);
+		if (days < 7) return `${days}d ago`;
+		return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 	}
 
-	function statusLabel(status: string): string {
-		const labels: Record<string, string> = {
-			interview: 'Interview',
-			drafting: 'Drafting',
-			highlighting: 'Highlighting',
-			synthesizing: 'Synthesizing',
-			complete: 'Complete'
-		};
-		return labels[status] ?? status;
-	}
+	const taskTypeLabels: Record<string, string> = {
+		essay: 'Essay',
+		review: 'Review',
+		newsletter: 'Newsletter',
+		landing_page: 'Landing Page',
+		blog_post: 'Blog Post'
+	};
 </script>
 
 <svelte:head>
-	<title>Dashboard — Inkwell</title>
+	<title>Inkwell</title>
 </svelte:head>
 
-<div class="dashboard">
-	<div class="header">
-		<h1>Your Sessions</h1>
-	</div>
+{#key session.screen}
+	<div class="screen">
+		{#if session.screen === 'task'}
+			<TaskSelector onResume={(id) => goto('/session/' + id)} />
 
-	<div class="grid">
-		<a href="/session/new" class="card new-card">
-			<span class="plus">+</span>
-			<span class="new-label">New Session</span>
-		</a>
-
-		{#each data.sessions as session}
-			<a href="/session/{session.id}" class="card session-card">
-				<div class="card-top">
-					<span class="badge">{session.task_type}</span>
-					<span class="status">{statusLabel(session.status)}</span>
+			{#if data.sessions.length > 0}
+				<div class="recent-sessions">
+					<div class="recent-label">Recent sessions</div>
+					<div class="session-list">
+						{#each data.sessions as s (s.id)}
+							<button class="session-row" onclick={() => goto('/session/' + s.id)}>
+								<span class="session-type">{taskTypeLabels[s.task_type] ?? s.task_type}</span>
+								<span class="session-topic">{s.topic || 'Untitled'}</span>
+								<span class="session-meta">
+									{#if s.draft_count > 0}{s.draft_count} draft{s.draft_count === 1 ? '' : 's'} ·{/if}
+									{relativeDate(s.created_at)}
+								</span>
+							</button>
+						{/each}
+					</div>
 				</div>
-				<p class="topic">{session.topic || 'Untitled session'}</p>
-				<div class="card-meta">
-					<span>{session.draft_count} draft{session.draft_count !== 1 ? 's' : ''}</span>
-					<span>{formatDate(session.created_at)}</span>
-				</div>
-			</a>
-		{/each}
+			{/if}
+		{:else if session.screen === 'interview'}
+			<Interview />
+		{:else if session.screen === 'outline'}
+			<OutlineScreen />
+		{:else if session.screen === 'drafts'}
+			<DraftComparison />
+		{:else if session.screen === 'focus'}
+			<FocusEditor />
+		{/if}
 	</div>
-
-	{#if data.sessions.length === 0}
-		<div class="empty">
-			<p class="empty-title">Start your first writing session</p>
-			<p class="empty-sub">Describe what you want to write — Inkwell will interview you and generate draft angles.</p>
-			<a href="/session/new" class="btn-primary">New Session</a>
-		</div>
-	{/if}
-</div>
+{/key}
 
 <style>
-	.dashboard {
-		padding: 32px;
-		max-width: 960px;
-		margin: 0 auto;
-	}
-
-	.header {
-		margin-bottom: 24px;
-	}
-
-	h1 {
-		font-family: 'Newsreader', serif;
-		font-weight: 600;
-		font-size: 24px;
-		margin: 0;
-	}
-
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-		gap: 16px;
-	}
-
-	.card {
+	.screen {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		padding: 20px;
-		border-radius: 10px;
-		border: 1px solid var(--chrome-border);
-		background: var(--chrome-surface);
-		text-decoration: none;
-		color: inherit;
-		transition: border-color 0.2s;
+		animation: fadeIn 0.2s ease-out;
 	}
 
-	.card:hover {
-		border-color: var(--chrome-text-muted);
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
-	.new-card {
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		min-height: 140px;
-		border-style: dashed;
+	.recent-sessions {
+		width: 100%;
+		max-width: 560px;
+		margin: 0 auto;
+		padding: 0 24px 40px;
 	}
 
-	.plus {
-		font-size: 28px;
-		color: var(--accent);
-		font-weight: 300;
-	}
-
-	.new-label {
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--chrome-text-muted);
-	}
-
-	.card-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 10px;
-	}
-
-	.badge {
+	.recent-label {
+		font-family: 'Outfit', sans-serif;
 		font-size: 11px;
 		font-weight: 600;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--accent);
-		background: var(--accent-glow);
-		padding: 3px 8px;
-		border-radius: 4px;
+		letter-spacing: 0.06em;
+		color: var(--chrome-text-muted);
+		margin-bottom: 8px;
+		padding: 0 4px;
 	}
 
-	.status {
+	.session-list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.session-row {
+		display: grid;
+		grid-template-columns: 80px 1fr auto;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 12px;
+		background: transparent;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+		text-align: left;
+		font-family: 'Outfit', sans-serif;
+		transition: background 0.15s;
+		width: 100%;
+	}
+
+	.session-row:hover {
+		background: rgba(255, 255, 255, 0.04);
+	}
+
+	.session-type {
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--accent);
+		flex-shrink: 0;
+	}
+
+	.session-topic {
+		font-size: 13px;
+		color: var(--chrome-text);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.session-meta {
 		font-size: 11px;
 		color: var(--chrome-text-muted);
-	}
-
-	.topic {
-		font-size: 15px;
-		font-weight: 500;
-		color: var(--chrome-text);
-		margin: 0 0 auto;
-		line-height: 1.4;
-		flex: 1;
-	}
-
-	.card-meta {
-		display: flex;
-		justify-content: space-between;
-		font-size: 12px;
-		color: var(--chrome-text-muted);
-		margin-top: 14px;
-		padding-top: 10px;
-		border-top: 1px solid var(--chrome-border);
-	}
-
-	.empty {
-		text-align: center;
-		padding: 60px 20px;
-	}
-
-	.empty-title {
-		font-family: 'Newsreader', serif;
-		font-size: 20px;
-		font-weight: 600;
-		color: var(--chrome-text);
-		margin: 0 0 8px;
-	}
-
-	.empty-sub {
-		font-size: 14px;
-		color: var(--chrome-text-muted);
-		margin: 0 0 24px;
-		max-width: 400px;
-		margin-left: auto;
-		margin-right: auto;
-	}
-
-	.btn-primary {
-		display: inline-block;
-		background: var(--accent);
-		color: white;
-		padding: 12px 28px;
-		border-radius: 24px;
-		font-size: 14px;
-		font-weight: 600;
-		text-decoration: none;
-		transition: opacity 0.2s;
-	}
-
-	.btn-primary:hover {
-		opacity: 0.9;
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 </style>

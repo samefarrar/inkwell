@@ -21,4 +21,14 @@ class Session(SQLModel, table=True):
     status: str = "interview"  # interview, drafting, highlighting, focused
     interview_summary: str | None = None
     key_material: str | None = None  # JSON list of key material strings
+    style_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("writing_style.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    outline: str = Field(default="[]")  # JSON list of OutlineNode dicts
+    selected_draft_index: int | None = None  # which draft the user took to focus
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -7,6 +7,7 @@
 	import Interview from '$lib/components/Interview.svelte';
 	import DraftComparison from '$lib/components/DraftComparison.svelte';
 	import FocusEditor from '$lib/components/FocusEditor.svelte';
+	import OutlineScreen from '$lib/components/OutlineScreen.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -31,6 +32,8 @@
 	<div class="screen">
 		{#if session.screen === 'interview'}
 			<Interview />
+		{:else if session.screen === 'outline'}
+			<OutlineScreen />
 		{:else if session.screen === 'drafts'}
 			<DraftComparison />
 		{:else if session.screen === 'focus'}

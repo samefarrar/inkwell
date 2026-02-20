@@ -5,6 +5,7 @@ handles feedback persistence, and delegates chat to focus_agent.
 """
 
 import asyncio
+import json
 import logging
 import re
 from html.parser import HTMLParser
@@ -13,8 +14,10 @@ from typing import Any
 from proof_editor.db import db_session
 from proof_editor.ws_types import (
     ErrorMessage,
+    FocusApproveComment,
     FocusChat,
     FocusCommentMsg,
+    FocusEditApplied,
     FocusEnter,
     FocusFeedbackMsg,
     FocusSuggestion,
@@ -23,6 +26,34 @@ from proof_editor.ws_types import (
 logger = logging.getLogger(__name__)
 
 MAX_DRAFT_CHARS = 50_000
+
+_APPROVE_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "apply_edit",
+            "description": "Apply the editorial change to the draft text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "old_text": {
+                        "type": "string",
+                        "description": (
+                            "Exact passage to replace (copy verbatim from the draft)"
+                        ),
+                    },
+                    "new_text": {
+                        "type": "string",
+                        "description": (
+                            "Improved replacement text implementing the suggestion"
+                        ),
+                    },
+                },
+                "required": ["old_text", "new_text"],
+            },
+        },
+    }
+]
 
 
 class _HTMLStripper(HTMLParser):
@@ -49,17 +80,21 @@ class FocusHandler:
         drafts: list[dict[str, Any]],
         interview_summary: str,
         key_material: list[str],
+        voice_profile_context: str = "",
     ) -> None:
         self.send = send
         self.session_id = session_id
         self.drafts = drafts
         self.interview_summary = interview_summary
         self.key_material = key_material
+        self.voice_profile_context = voice_profile_context
         self.draft_index: int = -1
         self.draft_content: str = ""
         self._focus_agent: Any = None
         self._chat_lock = asyncio.Lock()
         self._cancelled = False
+        # Store comments by ID so we can look them up on approve
+        self._comment_store: dict[str, FocusCommentMsg] = {}
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -103,6 +138,55 @@ class FocusHandler:
             )
             db.add(fb)
             db.commit()
+
+    async def handle_approve_comment(self, msg: FocusApproveComment) -> None:
+        """User approved an editorial comment — ask LLM to apply it."""
+        comment = self._comment_store.get(msg.id)
+        if not comment:
+            logger.warning("approve_comment: unknown comment id %s", msg.id)
+            return
+
+        current_text = self._strip_html(msg.current_content)[:MAX_DRAFT_CHARS]
+
+        try:
+            from litellm import acompletion
+
+            prompt = (
+                f"You are an editor. The writer has approved this editorial comment "
+                f"and wants you to apply it to their draft.\n\n"
+                f"Editorial comment: {comment.comment}\n\n"
+                f'The comment refers to this passage:\n"{comment.quote}"\n\n'
+                f"Current draft:\n{current_text}\n\n"
+                f"Call apply_edit with:\n"
+                f"- old_text: the exact passage to replace (use the quoted passage "
+                f"or nearby context if needed)\n"
+                f"- new_text: the improved version that implements the suggestion\n\n"
+                f"Keep changes minimal and targeted."
+            )
+
+            response = await acompletion(
+                model="anthropic/claude-sonnet-4-6",
+                messages=[{"role": "user", "content": prompt}],
+                tools=_APPROVE_TOOLS,
+                tool_choice={"type": "function", "function": {"name": "apply_edit"}},
+            )
+
+            llm_msg = response.choices[0].message
+            if llm_msg.tool_calls:
+                tc = llm_msg.tool_calls[0]
+                args = json.loads(tc.function.arguments)
+                old_text = args.get("old_text", "")
+                new_text = args.get("new_text", "")
+                if old_text:
+                    await self.send(
+                        FocusEditApplied(
+                            comment_id=msg.id,
+                            old_text=old_text,
+                            new_text=new_text,
+                        )
+                    )
+        except Exception as e:
+            logger.error("approve_comment LLM call failed: %s", e, exc_info=True)
 
     async def handle_chat(self, msg: FocusChat) -> None:
         """Handle chat message from user — delegate to focus agent."""
@@ -152,21 +236,23 @@ class FocusHandler:
             comments = await generate_comments(
                 text=text,
                 interview_context=self.interview_summary,
+                voice_profile_context=self.voice_profile_context,
             )
             for i, c in enumerate(comments):
                 if self._cancelled:
                     return
                 is_last = i == len(comments) - 1
-                await self.send(
-                    FocusCommentMsg(
-                        id=c.id,
-                        quote=c.quote,
-                        start=c.start,
-                        end=c.end,
-                        comment=c.comment,
-                        done=is_last,
-                    )
+                comment_msg = FocusCommentMsg(
+                    id=c.id,
+                    quote=c.quote,
+                    start=c.start,
+                    end=c.end,
+                    comment=c.comment,
+                    done=is_last,
                 )
+                # Store so we can look up on approve
+                self._comment_store[c.id] = comment_msg
+                await self.send(comment_msg)
             # If no comments were generated, still signal done
             if not comments:
                 await self.send(

@@ -35,7 +35,12 @@ export type ServerMessage =
       comment: string;
       done: boolean;
     }
-  | { type: 'focus.chat_response'; content: string; done: boolean };
+  | { type: 'focus.chat_response'; content: string; done: boolean }
+  | { type: 'focus.edit'; comment_id: string; old_text: string; new_text: string }
+  | {
+      type: 'outline.nodes';
+      nodes: Array<{ id: string; node_type: string; description: string }>;
+    };
 
 export type ClientMessage =
   | { type: 'task.select'; task_type: string; topic: string }
@@ -58,7 +63,13 @@ export type ClientMessage =
   | { type: 'focus.enter'; draft_index: number }
   | { type: 'focus.exit' }
   | { type: 'focus.chat'; message: string }
-  | { type: 'focus.feedback'; id: string; action: 'accept' | 'reject' | 'dismiss'; feedback_type: 'suggestion' | 'comment' };
+  | { type: 'focus.feedback'; id: string; action: 'accept' | 'reject' | 'dismiss'; feedback_type: 'suggestion' | 'comment' }
+  | { type: 'focus.approve_comment'; id: string; current_content: string }
+  | {
+      type: 'outline.confirm';
+      nodes: Array<{ id: string; node_type: string; description: string }>;
+    }
+  | { type: 'outline.skip' };
 
 type MessageHandler = (msg: ServerMessage) => void;
 

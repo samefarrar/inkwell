@@ -3,11 +3,13 @@
  * Call setupWsHandler() in onMount and destroy the returned unsubscribe in onDestroy.
  */
 
+import type { Node as PMNode } from '@tiptap/pm/model';
 import { ws, type ServerMessage } from '$lib/ws.svelte';
 import { session, type ChatMessage } from '$lib/stores/session.svelte';
 import { drafts } from '$lib/stores/drafts.svelte';
 import { focus } from '$lib/stores/focus.svelte';
 import { StreamBuffer } from '$lib/stream-buffer.svelte';
+import { buildOffsetMap } from '$lib/extensions/offset-mapper';
 
 export function setupWsHandler(): () => void {
 	const activeBuffers: StreamBuffer[] = [];
@@ -53,6 +55,10 @@ export function setupWsHandler(): () => void {
 
 			case 'ready_to_draft':
 				session.setReadyToDraft(msg.summary, msg.key_material);
+				break;
+
+			case 'outline.nodes':
+				session.goToOutline(msg.nodes);
 				break;
 
 			case 'draft.start':
@@ -128,6 +134,48 @@ export function setupWsHandler(): () => void {
 				} else {
 					focus.addChatMessage({ role: 'ai', content: msg.content, done: msg.done });
 				}
+				break;
+			}
+
+			case 'focus.edit': {
+				if (session.screen !== 'focus') break;
+				const editor = focus.editorInstance;
+				if (editor && msg.old_text) {
+					// Block-local search: never cross paragraph boundaries — offset map
+					// separator spaces are virtual positions that can corrupt structure.
+					const { state, view } = editor;
+					const doc = state.doc;
+					let tr = state.tr;
+					let replaced = false;
+
+					doc.descendants((node: PMNode, pos: number) => {
+						if (replaced || !node.isBlock) return !replaced;
+
+						let blockText = '';
+						const charPos: number[] = [];
+						node.descendants((child: PMNode, childPos: number) => {
+							if (child.isText && child.text) {
+								for (let i = 0; i < child.text.length; i++) {
+									charPos.push(pos + 1 + childPos + i);
+									blockText += child.text[i];
+								}
+							}
+						});
+
+						const textIdx = blockText.indexOf(msg.old_text);
+						if (textIdx === -1) return true;
+
+						const from = charPos[textIdx];
+						const to = charPos[textIdx + msg.old_text.length - 1] + 1;
+						tr = tr.insertText(msg.new_text, from, to);
+						replaced = true;
+						return false;
+					});
+
+					if (replaced) view.dispatch(tr);
+				}
+				focus.removePendingApprove(msg.comment_id);
+				focus.dismissComment(msg.comment_id);
 				break;
 			}
 		}

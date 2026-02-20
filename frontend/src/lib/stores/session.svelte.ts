@@ -3,7 +3,7 @@
  * Uses Svelte 5 runes for reactivity.
  */
 
-export type Screen = 'task' | 'interview' | 'drafts' | 'focus';
+export type Screen = 'task' | 'interview' | 'outline' | 'drafts' | 'focus';
 export type AppView = 'session' | 'styles' | 'style_editor';
 
 export interface SessionSummary {
@@ -34,6 +34,12 @@ export interface ChatMessage {
   search?: SearchInfo;
 }
 
+export interface OutlineNode {
+  id: string;
+  node_type: string;
+  description: string;
+}
+
 class SessionStore {
   screen = $state<Screen>('task');
   appView = $state<AppView>('session');
@@ -46,6 +52,7 @@ class SessionStore {
   readyToDraft = $state(false);
   draftSummary = $state('');
   keyMaterial = $state<string[]>([]);
+  outlineNodes = $state<OutlineNode[]>([]);
 
   startInterview(taskType: string, topic: string): void {
     this.taskType = taskType;
@@ -67,6 +74,11 @@ class SessionStore {
     this.keyMaterial = keyMaterial;
   }
 
+  goToOutline(nodes: OutlineNode[]): void {
+    this.outlineNodes = nodes;
+    this.screen = 'outline';
+  }
+
   goToDrafts(): void {
     this.screen = 'drafts';
   }
@@ -83,6 +95,7 @@ class SessionStore {
     this.readyToDraft = false;
     this.draftSummary = '';
     this.keyMaterial = [];
+    this.outlineNodes = [];
     this.currentSessionId = null;
   }
 

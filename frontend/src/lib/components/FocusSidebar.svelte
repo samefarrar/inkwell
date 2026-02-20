@@ -1,12 +1,45 @@
 <script lang="ts">
 	import { focus } from '$lib/stores/focus.svelte';
 	import { ws } from '$lib/ws.svelte';
+	import { buildOffsetMap, mapRange } from '$lib/extensions/offset-mapper';
+
 	type Tab = 'suggestions' | 'comments' | 'chat';
 	let activeTab = $state<Tab>('suggestions');
 	let chatInput = $state('');
 
+	function scrollToDecoration(selector: string): void {
+		const editor = focus.editorInstance;
+		if (!editor) return;
+		const el = editor.view.dom.querySelector(selector);
+		el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	}
+
+	function selectSuggestion(id: string) {
+		focus.setActiveSuggestion(id);
+		scrollToDecoration(`[data-suggestion-id="${id}"]`);
+	}
+
+	function selectComment(id: string) {
+		focus.setActiveComment(id);
+		scrollToDecoration(`[data-comment-id="${id}"]`);
+	}
+
 	function acceptSuggestion(id: string) {
-		// TODO: apply replacement to TipTap document using start/end offsets
+		const s = focus.suggestions.find((s) => s.id === id);
+		if (s) {
+			const editor = focus.editorInstance;
+			if (editor) {
+				const map = buildOffsetMap(editor.state.doc);
+				const range = mapRange(map, s.start, s.end, s.quote);
+				if (range) {
+					if (s.replacement) {
+						editor.chain().insertContentAt({ from: range.from, to: range.to }, s.replacement).run();
+					} else {
+						editor.chain().deleteRange({ from: range.from, to: range.to }).run();
+					}
+				}
+			}
+		}
 		focus.acceptSuggestion(id);
 		ws.send({ type: 'focus.feedback', id, action: 'accept', feedback_type: 'suggestion' });
 	}
@@ -19,6 +52,13 @@
 	function dismissComment(id: string) {
 		focus.dismissComment(id);
 		ws.send({ type: 'focus.feedback', id, action: 'dismiss', feedback_type: 'comment' });
+	}
+
+	function approveComment(id: string) {
+		focus.addPendingApprove(id);
+		const editor = focus.editorInstance;
+		const currentContent = editor ? editor.getHTML() : '';
+		ws.send({ type: 'focus.approve_comment', id, current_content: currentContent });
 	}
 
 	function sendChat() {
@@ -88,7 +128,14 @@
 					{/if}
 				{:else}
 					{#each focus.suggestions as s (s.id)}
-						<div class="suggestion-card">
+						<div
+							class="suggestion-card"
+							class:active={focus.activeSuggestionId === s.id}
+							onclick={() => selectSuggestion(s.id)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => e.key === 'Enter' && selectSuggestion(s.id)}
+						>
 							<div class="suggestion-quote">"{truncate(s.quote, 60)}"</div>
 							{#if s.replacement}
 								<div class="suggestion-change">
@@ -96,19 +143,19 @@
 									<span class="change-arrow">&rarr;</span>
 									<span class="change-to">{s.replacement}</span>
 								</div>
-							{:else}
-								<div class="suggestion-change">
-									<span class="change-from">{s.quote}</span>
-									<span class="change-arrow">&rarr;</span>
-									<span class="change-remove">(remove)</span>
-								</div>
 							{/if}
 							<div class="suggestion-explanation">{s.explanation}</div>
 							<div class="suggestion-actions">
-								<button class="action-btn accept" onclick={() => acceptSuggestion(s.id)}>
+								<button
+									class="action-btn accept"
+									onclick={(e) => { e.stopPropagation(); acceptSuggestion(s.id); }}
+								>
 									Accept
 								</button>
-								<button class="action-btn reject" onclick={() => rejectSuggestion(s.id)}>
+								<button
+									class="action-btn reject"
+									onclick={(e) => { e.stopPropagation(); rejectSuggestion(s.id); }}
+								>
 									Reject
 								</button>
 								<span class="rule-tag">{s.ruleId}</span>
@@ -131,11 +178,29 @@
 					{/if}
 				{:else}
 					{#each focus.comments as c (c.id)}
-						<div class="comment-card">
+						<div
+							class="comment-card"
+							class:active={focus.activeCommentId === c.id}
+							onclick={() => selectComment(c.id)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => e.key === 'Enter' && selectComment(c.id)}
+						>
 							<div class="comment-quote">"{truncate(c.quote, 60)}"</div>
 							<div class="comment-text">{c.comment}</div>
 							<div class="comment-actions">
-								<button class="action-btn dismiss" onclick={() => dismissComment(c.id)}>
+								<button
+									class="action-btn approve"
+									class:pending={focus.pendingApproveIds.includes(c.id)}
+									disabled={focus.pendingApproveIds.includes(c.id)}
+									onclick={(e) => { e.stopPropagation(); approveComment(c.id); }}
+								>
+									{focus.pendingApproveIds.includes(c.id) ? 'Applying…' : 'Approve'}
+								</button>
+								<button
+									class="action-btn dismiss"
+									onclick={(e) => { e.stopPropagation(); dismissComment(c.id); }}
+								>
 									Dismiss
 								</button>
 							</div>
@@ -276,11 +341,17 @@
 		border: 1px solid var(--chrome-border);
 		border-radius: 8px;
 		margin-bottom: 8px;
-		transition: border-color 0.2s;
+		cursor: pointer;
+		transition: border-color 0.2s, box-shadow 0.2s;
 	}
 
 	.suggestion-card:hover {
 		border-color: var(--chrome-text-muted);
+	}
+
+	.suggestion-card.active {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 1px rgba(224, 120, 67, 0.2);
 	}
 
 	.suggestion-quote {
@@ -311,11 +382,6 @@
 
 	.change-to {
 		color: var(--success);
-	}
-
-	.change-remove {
-		color: var(--chrome-text-muted);
-		font-style: italic;
 	}
 
 	.suggestion-explanation {
@@ -362,6 +428,20 @@
 		background: rgba(239, 68, 68, 0.08);
 	}
 
+	.action-btn.approve {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.action-btn.approve:hover:not(:disabled) {
+		background: rgba(232, 115, 58, 0.1);
+	}
+
+	.action-btn.approve.pending {
+		opacity: 0.6;
+		cursor: wait;
+	}
+
 	.action-btn.dismiss {
 		color: var(--chrome-text-muted);
 	}
@@ -391,6 +471,17 @@
 		border: 1px solid var(--chrome-border);
 		border-radius: 8px;
 		margin-bottom: 8px;
+		cursor: pointer;
+		transition: border-color 0.2s, box-shadow 0.2s;
+	}
+
+	.comment-card:hover {
+		border-color: var(--chrome-text-muted);
+	}
+
+	.comment-card.active {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 1px rgba(224, 120, 67, 0.2);
 	}
 
 	.comment-quote {
