@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { ws } from '$lib/ws.svelte';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
+
+	let sidebarCollapsed = $state(false);
 
 	onMount(() => {
 		ws.connect();
@@ -19,16 +23,11 @@
 </svelte:head>
 
 <div class="app">
-	<aside class="sidebar">
-		<div class="sidebar-header">
-			<span class="sidebar-logo">Inkwell</span>
-		</div>
-
-		<nav class="sidebar-nav">
-			<a href="/dashboard" class="nav-item">Dashboard</a>
-			<a href="/styles" class="nav-item">Styles</a>
-			<a href="/settings" class="nav-item">Settings</a>
-		</nav>
+	<div class="sidebar-wrapper" class:collapsed={sidebarCollapsed}>
+		<Sidebar
+			onResume={(id) => goto('/session/' + id)}
+			onNewSession={() => goto('/dashboard')}
+		/>
 
 		<div class="sidebar-footer">
 			<div class="user-info">
@@ -39,11 +38,18 @@
 				<button type="submit" class="logout-btn">Log out</button>
 			</form>
 		</div>
-	</aside>
+	</div>
 
 	<div class="main-area">
 		<nav class="topbar">
 			<div class="nav-left">
+				<button
+					class="collapse-btn"
+					onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+				>
+					{sidebarCollapsed ? '›' : '‹'}
+				</button>
 				<span class="connection-dot" class:connected={ws.connected}></span>
 			</div>
 		</nav>
@@ -61,63 +67,29 @@
 		flex-direction: row;
 	}
 
-	.sidebar {
+	.sidebar-wrapper {
 		width: 240px;
 		min-width: 240px;
 		height: 100vh;
-		background: #16161a;
-		background-image: linear-gradient(180deg, rgba(232, 115, 58, 0.03) 0%, transparent 120px);
-		border-right: 1px solid var(--chrome-border);
+		position: sticky;
+		top: 0;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-		position: sticky;
-		top: 0;
-	}
-
-	.sidebar-header {
-		padding: 14px 16px 10px;
+		border-right: 1px solid var(--chrome-border);
+		transition: width 0.2s ease, min-width 0.2s ease;
 		flex-shrink: 0;
 	}
 
-	.sidebar-logo {
-		font-family: 'Newsreader', serif;
-		font-style: italic;
-		font-weight: 600;
-		font-size: 22px;
-		color: var(--chrome-text);
-		letter-spacing: -0.01em;
-	}
-
-	.sidebar-nav {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		padding: 8px;
-		flex: 1;
-	}
-
-	.nav-item {
-		padding: 8px 12px;
-		font-family: 'Outfit', sans-serif;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--chrome-text-muted);
-		text-decoration: none;
-		border-radius: 6px;
-		transition:
-			color 0.2s,
-			background 0.2s;
-	}
-
-	.nav-item:hover {
-		color: var(--chrome-text);
-		background: rgba(255, 255, 255, 0.04);
+	.sidebar-wrapper.collapsed {
+		width: 0;
+		min-width: 0;
 	}
 
 	.sidebar-footer {
 		padding: 12px 16px;
 		border-top: 1px solid var(--chrome-border);
+		background: #16161a;
 		flex-shrink: 0;
 	}
 
@@ -175,7 +147,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 24px;
+		padding: 0 16px;
 		border-bottom: 1px solid var(--chrome-border);
 		background: var(--chrome);
 		height: 48px;
@@ -186,6 +158,29 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+	}
+
+	.collapse-btn {
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: 1px solid var(--chrome-border);
+		border-radius: 6px;
+		color: var(--chrome-text-muted);
+		font-size: 16px;
+		cursor: pointer;
+		transition:
+			color 0.2s,
+			background 0.2s;
+		flex-shrink: 0;
+	}
+
+	.collapse-btn:hover {
+		color: var(--chrome-text);
+		background: rgba(255, 255, 255, 0.04);
 	}
 
 	.connection-dot {
