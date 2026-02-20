@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # --- Client → Server ---
 
@@ -59,6 +59,27 @@ class SessionResume(BaseModel):
 
 class SessionCancel(BaseModel):
     type: Literal["session.cancel"] = "session.cancel"
+
+
+class FocusEnter(BaseModel):
+    type: Literal["focus.enter"] = "focus.enter"
+    draft_index: int
+
+
+class FocusExit(BaseModel):
+    type: Literal["focus.exit"] = "focus.exit"
+
+
+class FocusChat(BaseModel):
+    type: Literal["focus.chat"] = "focus.chat"
+    message: str = Field(max_length=4000)
+
+
+class FocusFeedbackMsg(BaseModel):
+    type: Literal["focus.feedback"] = "focus.feedback"
+    id: str
+    action: Literal["accept", "reject", "dismiss"]
+    feedback_type: Literal["suggestion", "comment"]
 
 
 # --- Server → Client ---
@@ -125,6 +146,33 @@ class ErrorMessage(BaseModel):
     message: str
 
 
+class FocusSuggestion(BaseModel):
+    type: Literal["focus.suggestion"] = "focus.suggestion"
+    id: str
+    quote: str
+    start: int
+    end: int
+    replacement: str
+    explanation: str
+    rule_id: str
+
+
+class FocusCommentMsg(BaseModel):
+    type: Literal["focus.comment"] = "focus.comment"
+    id: str
+    quote: str
+    start: int
+    end: int
+    comment: str
+    done: bool = False
+
+
+class FocusChatResponse(BaseModel):
+    type: Literal["focus.chat_response"] = "focus.chat_response"
+    content: str
+    done: bool
+
+
 # Discriminated union for parsing incoming messages
 ClientMessage = (
     TaskSelect
@@ -136,6 +184,10 @@ ClientMessage = (
     | DraftSynthesize
     | SessionResume
     | SessionCancel
+    | FocusEnter
+    | FocusExit
+    | FocusChat
+    | FocusFeedbackMsg
 )
 
 ServerMessage = (
@@ -149,4 +201,7 @@ ServerMessage = (
     | DraftSynthesized
     | StatusMessage
     | ErrorMessage
+    | FocusSuggestion
+    | FocusCommentMsg
+    | FocusChatResponse
 )

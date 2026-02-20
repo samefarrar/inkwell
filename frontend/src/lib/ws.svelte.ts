@@ -15,7 +15,27 @@ export type ServerMessage =
   | { type: 'draft.complete'; draft_index: number; word_count: number }
   | { type: 'draft.synthesized'; content: string; sent_to_proof: boolean }
   | { type: 'status'; message: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | {
+      type: 'focus.suggestion';
+      id: string;
+      quote: string;
+      start: number;
+      end: number;
+      replacement: string;
+      explanation: string;
+      rule_id: string;
+    }
+  | {
+      type: 'focus.comment';
+      id: string;
+      quote: string;
+      start: number;
+      end: number;
+      comment: string;
+      done: boolean;
+    }
+  | { type: 'focus.chat_response'; content: string; done: boolean };
 
 export type ClientMessage =
   | { type: 'task.select'; task_type: string; topic: string }
@@ -34,7 +54,11 @@ export type ClientMessage =
   | { type: 'draft.edit'; draft_index: number; content: string }
   | { type: 'draft.synthesize' }
   | { type: 'session.resume'; session_id: number }
-  | { type: 'session.cancel' };
+  | { type: 'session.cancel' }
+  | { type: 'focus.enter'; draft_index: number }
+  | { type: 'focus.exit' }
+  | { type: 'focus.chat'; message: string }
+  | { type: 'focus.feedback'; id: string; action: 'accept' | 'reject' | 'dismiss'; feedback_type: 'suggestion' | 'comment' };
 
 type MessageHandler = (msg: ServerMessage) => void;
 
@@ -46,6 +70,7 @@ export class WebSocketClient {
   private reconnectDelay = 1000;
   private shouldReconnect = true;
   private _connected = $state(false);
+  private pendingSends: ClientMessage[] = [];
 
   get connected(): boolean {
     return this._connected;
@@ -60,6 +85,11 @@ export class WebSocketClient {
       this._connected = true;
       this.reconnectDelay = 1000;
       console.log('[WS] Connected');
+      // Flush any messages queued before connection opened
+      for (const msg of this.pendingSends) {
+        this.ws!.send(JSON.stringify(msg));
+      }
+      this.pendingSends = [];
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
@@ -99,7 +129,8 @@ export class WebSocketClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {
-      console.warn('[WS] Not connected, cannot send:', msg.type);
+      // Queue messages to be sent when connection opens
+      this.pendingSends.push(msg);
     }
   }
 

@@ -21,4 +21,6 @@ class Feedback(SQLModel, table=True):
     replacement: str | None = None
     accepted: bool
     rule_id: str | None = None
+    action: str | None = None  # "accept", "reject", or "dismiss"
+    feedback_type: str | None = None  # "suggestion" or "comment"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

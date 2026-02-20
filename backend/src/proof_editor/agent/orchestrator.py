@@ -14,6 +14,9 @@ from proof_editor.ws_types import (
     DraftHighlight,
     DraftSynthesize,
     ErrorMessage,
+    FocusChat,
+    FocusEnter,
+    FocusFeedbackMsg,
     HighlightRemove,
     HighlightUpdate,
     InterviewAnswer,
@@ -46,6 +49,7 @@ class Orchestrator:
         # These get initialized lazily to avoid import-time LLM setup
         self._interviewer: Any = None
         self._generator: Any = None
+        self._focus_handler: Any = None
 
     async def send(self, msg: Any) -> None:
         """Send a typed message over WebSocket."""
@@ -478,3 +482,44 @@ class Orchestrator:
             len(self.highlights),
             self.synthesis_round,
         )
+
+    async def handle_focus_enter(self, msg: FocusEnter) -> None:
+        """Enter focus editing mode on a specific draft."""
+        if self.state not in ("highlighting", "focused"):
+            await self.send(ErrorMessage(message="Not in highlighting state"))
+            return
+
+        from proof_editor.agent.focus_handler import FocusHandler
+
+        # Cancel old handler if switching drafts
+        if self._focus_handler is not None:
+            self._focus_handler.cancel()
+
+        self.state = "focused"
+        self._focus_handler = FocusHandler(
+            send=self.send,
+            session_id=self.session_id,
+            drafts=self.drafts,
+            interview_summary=self.interview_summary,
+            key_material=self.key_material,
+        )
+        await self._focus_handler.handle_enter(msg)
+
+    async def handle_focus_exit(self) -> None:
+        """Exit focus mode, return to highlighting."""
+        self.state = "highlighting"
+        self._focus_handler = None
+        logger.info("Exited focus mode")
+
+    async def handle_focus_feedback(self, msg: FocusFeedbackMsg) -> None:
+        """Handle feedback on a suggestion or comment."""
+        if self.state != "focused" or not self._focus_handler:
+            return
+        await self._focus_handler.handle_feedback(msg)
+
+    async def handle_focus_chat(self, msg: FocusChat) -> None:
+        """Handle chat message in focus mode."""
+        if self.state != "focused" or not self._focus_handler:
+            await self.send(ErrorMessage(message="Not in focus mode"))
+            return
+        await self._focus_handler.handle_chat(msg)

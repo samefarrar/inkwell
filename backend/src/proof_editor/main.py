@@ -26,6 +26,9 @@ from proof_editor.ws_types import (
     DraftHighlight,
     DraftSynthesize,
     ErrorMessage,
+    FocusChat,
+    FocusEnter,
+    FocusFeedbackMsg,
     HighlightRemove,
     HighlightUpdate,
     InterviewAnswer,
@@ -163,6 +166,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await orchestrator.handle_synthesize(DraftSynthesize(**data))
                 elif msg_type == "session.resume":
                     await orchestrator.handle_resume(SessionResume(**data).session_id)
+                elif msg_type == "focus.enter":
+                    await orchestrator.handle_focus_enter(FocusEnter(**data))
+                elif msg_type == "focus.exit":
+                    await orchestrator.handle_focus_exit()
+                elif msg_type == "focus.feedback":
+                    await orchestrator.handle_focus_feedback(FocusFeedbackMsg(**data))
+                elif msg_type == "focus.chat":
+                    await orchestrator.handle_focus_chat(FocusChat(**data))
                 elif msg_type == "session.cancel":
                     await orchestrator.handle_cancel()
                 else:

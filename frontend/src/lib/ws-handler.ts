@@ -6,6 +6,7 @@
 import { ws, type ServerMessage } from '$lib/ws.svelte';
 import { session, type ChatMessage } from '$lib/stores/session.svelte';
 import { drafts } from '$lib/stores/drafts.svelte';
+import { focus } from '$lib/stores/focus.svelte';
 import { StreamBuffer } from '$lib/stream-buffer.svelte';
 
 export function setupWsHandler(): () => void {
@@ -86,6 +87,49 @@ export function setupWsHandler(): () => void {
 				});
 				console.error('[WS] Error from server:', msg.message);
 				break;
+
+			case 'focus.suggestion':
+				if (session.screen !== 'focus') break;
+				focus.addSuggestion({
+					id: msg.id,
+					quote: msg.quote,
+					start: msg.start,
+					end: msg.end,
+					replacement: msg.replacement,
+					explanation: msg.explanation,
+					ruleId: msg.rule_id
+				});
+				break;
+
+			case 'focus.comment':
+				if (session.screen !== 'focus') break;
+				if (msg.comment) {
+					focus.addComment(
+						{
+							id: msg.id,
+							quote: msg.quote,
+							start: msg.start,
+							end: msg.end,
+							comment: msg.comment
+						},
+						msg.done
+					);
+				} else if (msg.done) {
+					focus.analyzing = false;
+				}
+				break;
+
+			case 'focus.chat_response': {
+				if (session.screen !== 'focus') break;
+				if (focus.activeChatMessage && !focus.activeChatMessage.done) {
+					focus.activeChatMessage.content += msg.content;
+					focus.activeChatMessage.done = msg.done;
+					if (msg.done) focus.activeChatMessage = null;
+				} else {
+					focus.addChatMessage({ role: 'ai', content: msg.content, done: msg.done });
+				}
+				break;
+			}
 		}
 	});
 
