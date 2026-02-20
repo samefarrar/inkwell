@@ -80,12 +80,14 @@ class FocusHandler:
         drafts: list[dict[str, Any]],
         interview_summary: str,
         key_material: list[str],
+        voice_profile_context: str = "",
     ) -> None:
         self.send = send
         self.session_id = session_id
         self.drafts = drafts
         self.interview_summary = interview_summary
         self.key_material = key_material
+        self.voice_profile_context = voice_profile_context
         self.draft_index: int = -1
         self.draft_content: str = ""
         self._focus_agent: Any = None
@@ -234,6 +236,7 @@ class FocusHandler:
             comments = await generate_comments(
                 text=text,
                 interview_context=self.interview_summary,
+                voice_profile_context=self.voice_profile_context,
             )
             for i, c in enumerate(comments):
                 if self._cancelled:

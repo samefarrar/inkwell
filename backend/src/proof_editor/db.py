@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "proof_editor.db"
 
-SCHEMA_VERSION = 3  # Bump when models change
+SCHEMA_VERSION = 4  # Bump when models change
 
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 
@@ -74,7 +74,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-class db_session:
+class db_session:  # noqa: N801
     """Context manager for manual DB usage (outside FastAPI dependencies).
 
     Usage: with db_session() as db: ...

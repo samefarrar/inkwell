@@ -57,6 +57,10 @@ export function setupWsHandler(): () => void {
 				session.setReadyToDraft(msg.summary, msg.key_material);
 				break;
 
+			case 'outline.nodes':
+				session.goToOutline(msg.nodes);
+				break;
+
 			case 'draft.start':
 				if (session.screen !== 'drafts') {
 					session.goToDrafts();

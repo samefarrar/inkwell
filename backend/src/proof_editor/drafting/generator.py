@@ -8,7 +8,6 @@ from typing import Any
 from fastapi import WebSocket
 
 from proof_editor.drafting.prompts import build_draft_prompt, get_angles
-from proof_editor.examples.loader import format_examples_for_prompt, load_examples
 from proof_editor.ws_types import DraftChunk, DraftComplete, DraftStart
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,8 @@ class DraftGenerator:
         interview_summary: str,
         key_material: list[str],
         websocket: WebSocket,
+        examples_context: str = "",
+        outline: list[dict[str, Any]] | None = None,
     ) -> None:
         self.task_type = task_type
         self.topic = topic
@@ -33,9 +34,17 @@ class DraftGenerator:
         self.key_material = key_material
         self.ws = websocket
         self.angles = get_angles(task_type)
+        self.outline = outline or []
 
-        examples = load_examples()
-        self.examples_context = format_examples_for_prompt(examples)
+        if examples_context:
+            self.examples_context = examples_context
+        else:
+            from proof_editor.examples.loader import (
+                format_examples_for_prompt,
+                load_examples,
+            )
+
+            self.examples_context = format_examples_for_prompt(load_examples())
 
     async def generate(self) -> list[dict[str, Any]]:
         """Generate 3 drafts concurrently, streaming each over WebSocket.
@@ -72,6 +81,7 @@ class DraftGenerator:
             interview_summary=self.interview_summary,
             key_material=self.key_material,
             examples_context=self.examples_context,
+            outline=self.outline,
         )
 
         # Send draft.start

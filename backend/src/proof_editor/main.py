@@ -189,6 +189,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await orchestrator.handle_focus_approve_comment(
                         FocusApproveComment(**data)
                     )
+                elif msg_type == "outline.confirm":
+                    from proof_editor.ws_types import OutlineConfirm
+
+                    await orchestrator.handle_outline_confirm(OutlineConfirm(**data))
+                elif msg_type == "outline.skip":
+                    await orchestrator.handle_outline_skip()
                 elif msg_type == "session.cancel":
                     await orchestrator.handle_cancel()
                 else:
