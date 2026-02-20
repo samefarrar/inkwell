@@ -523,3 +523,9 @@ class Orchestrator:
             await self.send(ErrorMessage(message="Not in focus mode"))
             return
         await self._focus_handler.handle_chat(msg)
+
+    async def handle_focus_approve_comment(self, msg: Any) -> None:
+        """Handle approve comment — ask LLM to apply the editorial suggestion."""
+        if self.state != "focused" or not self._focus_handler:
+            return
+        await self._focus_handler.handle_approve_comment(msg)

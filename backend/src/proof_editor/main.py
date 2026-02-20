@@ -125,6 +125,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.close(code=4001, reason="Invalid token")
         return
 
+    # Verify user exists in DB (JWT may reference a deleted/wiped user)
+    from proof_editor.db import db_session as _db_ctx
+    from proof_editor.models.user import User
+
+    with _db_ctx() as db:
+        if not db.get(User, user_id):
+            await websocket.close(code=4001, reason="User not found")
+            return
+
     # Origin check
     origin = websocket.headers.get("origin", "")
     if origin and origin not in ALLOWED_ORIGINS:
@@ -174,6 +183,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await orchestrator.handle_focus_feedback(FocusFeedbackMsg(**data))
                 elif msg_type == "focus.chat":
                     await orchestrator.handle_focus_chat(FocusChat(**data))
+                elif msg_type == "focus.approve_comment":
+                    from proof_editor.ws_types import FocusApproveComment
+
+                    await orchestrator.handle_focus_approve_comment(
+                        FocusApproveComment(**data)
+                    )
                 elif msg_type == "session.cancel":
                     await orchestrator.handle_cancel()
                 else:

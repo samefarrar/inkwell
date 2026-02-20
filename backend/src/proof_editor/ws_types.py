@@ -82,6 +82,12 @@ class FocusFeedbackMsg(BaseModel):
     feedback_type: Literal["suggestion", "comment"]
 
 
+class FocusApproveComment(BaseModel):
+    type: Literal["focus.approve_comment"] = "focus.approve_comment"
+    id: str
+    current_content: str  # current editor HTML so backend can work with latest text
+
+
 # --- Server → Client ---
 
 
@@ -173,6 +179,13 @@ class FocusChatResponse(BaseModel):
     done: bool
 
 
+class FocusEditApplied(BaseModel):
+    type: Literal["focus.edit"] = "focus.edit"
+    comment_id: str
+    old_text: str
+    new_text: str
+
+
 # Discriminated union for parsing incoming messages
 ClientMessage = (
     TaskSelect
@@ -188,6 +201,7 @@ ClientMessage = (
     | FocusExit
     | FocusChat
     | FocusFeedbackMsg
+    | FocusApproveComment
 )
 
 ServerMessage = (
@@ -204,4 +218,5 @@ ServerMessage = (
     | FocusSuggestion
     | FocusCommentMsg
     | FocusChatResponse
+    | FocusEditApplied
 )

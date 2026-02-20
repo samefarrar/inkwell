@@ -38,6 +38,7 @@ INSTRUCTIONS:
   * Active voice preferred
   * Numbers: spell out 1-9, numerals for 10+
   * Cut filler words: "actually", "very", "just", "really"
+- Do not use HTML tags or formatting. Output plain text only.
 - Make it compelling and publication-ready
 - Include a title
 

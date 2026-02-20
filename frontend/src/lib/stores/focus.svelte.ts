@@ -43,6 +43,14 @@ class FocusStore {
 	analyzing = $state(false);
 	chatStreaming = $state(false);
 	editorReady = $state(false);
+	// Inline feedback active state (drives decoration emphasis + sidebar highlight)
+	activeSuggestionId = $state<string | null>(null);
+	activeCommentId = $state<string | null>(null);
+	// Reference to the TipTap Editor instance (set by FocusTipTap on mount)
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	editorInstance = $state<any>(null);
+	// Comment IDs waiting for an LLM-driven approve edit to come back
+	pendingApproveIds = $state<string[]>([]);
 	private pendingQueue: QueuedMessage[] = [];
 
 	get suggestionCount(): number {
@@ -67,6 +75,9 @@ class FocusStore {
 		this.analyzing = true;
 		this.chatStreaming = false;
 		this.editorReady = false;
+		this.activeSuggestionId = null;
+		this.activeCommentId = null;
+		this.pendingApproveIds = [];
 		this.pendingQueue = [];
 	}
 
@@ -79,8 +90,25 @@ class FocusStore {
 		this.analyzing = false;
 		this.chatStreaming = false;
 		this.editorReady = false;
+		this.activeSuggestionId = null;
+		this.activeCommentId = null;
+		this.pendingApproveIds = [];
 		this.pendingQueue = [];
 		this.activeChatMessage = null;
+	}
+
+	setEditorInstance(editor: unknown): void {
+		this.editorInstance = editor;
+	}
+
+	setActiveSuggestion(id: string | null): void {
+		this.activeSuggestionId = id;
+		this.activeCommentId = null;
+	}
+
+	setActiveComment(id: string | null): void {
+		this.activeCommentId = id;
+		this.activeSuggestionId = null;
 	}
 
 	setEditorReady(): void {
@@ -111,14 +139,28 @@ class FocusStore {
 
 	acceptSuggestion(id: string): void {
 		this.suggestions = this.suggestions.filter((s) => s.id !== id);
+		if (this.activeSuggestionId === id) this.activeSuggestionId = null;
 	}
 
 	rejectSuggestion(id: string): void {
 		this.suggestions = this.suggestions.filter((s) => s.id !== id);
+		if (this.activeSuggestionId === id) this.activeSuggestionId = null;
 	}
 
 	dismissComment(id: string): void {
 		this.comments = this.comments.filter((c) => c.id !== id);
+		if (this.activeCommentId === id) this.activeCommentId = null;
+		this.pendingApproveIds = this.pendingApproveIds.filter((i) => i !== id);
+	}
+
+	addPendingApprove(id: string): void {
+		if (!this.pendingApproveIds.includes(id)) {
+			this.pendingApproveIds = [...this.pendingApproveIds, id];
+		}
+	}
+
+	removePendingApprove(id: string): void {
+		this.pendingApproveIds = this.pendingApproveIds.filter((i) => i !== id);
 	}
 
 	addChatMessage(msg: FocusChatMessage): void {

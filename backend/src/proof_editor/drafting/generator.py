@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from fastapi import WebSocket
@@ -11,6 +12,8 @@ from proof_editor.examples.loader import format_examples_for_prompt, load_exampl
 from proof_editor.ws_types import DraftChunk, DraftComplete, DraftStart
 
 logger = logging.getLogger(__name__)
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 class DraftGenerator:
@@ -97,14 +100,16 @@ class DraftGenerator:
             async for chunk in response:
                 delta = chunk.choices[0].delta
                 if delta.content:
-                    full_content += delta.content
-                    await self.ws.send_text(
-                        DraftChunk(
-                            draft_index=draft_index,
-                            content=delta.content,
-                            done=False,
-                        ).model_dump_json()
-                    )
+                    clean = _HTML_TAG_RE.sub("", delta.content)
+                    if clean:
+                        full_content += clean
+                        await self.ws.send_text(
+                            DraftChunk(
+                                draft_index=draft_index,
+                                content=clean,
+                                done=False,
+                            ).model_dump_json()
+                        )
 
         except Exception as e:
             logger.error("Draft %d LLM error: %s", draft_index, e)
