@@ -2,6 +2,7 @@
   import { drafts } from '$lib/stores/drafts.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { focus } from '$lib/stores/focus.svelte';
+  import { styles } from '$lib/stores/styles.svelte';
   import { ws } from '$lib/ws.svelte';
   import DraftPanel from './DraftPanel.svelte';
 
@@ -70,6 +71,29 @@
   );
 
   let transcriptOpen = $state(false);
+
+  // Save-to-profile banner state
+  let saveStyleId = $state<number | null>(styles.styles[0]?.id ?? null);
+  let saving = $state(false);
+
+  $effect(() => {
+    if (styles.styles.length > 0 && saveStyleId === null) {
+      saveStyleId = styles.styles[0].id;
+    }
+  });
+
+  async function handleSaveToProfile() {
+    if (!focus.postFocusContent || !saveStyleId) return;
+    saving = true;
+    const title = session.topic || 'Untitled';
+    await styles.addSample(saveStyleId, title, focus.postFocusContent);
+    saving = false;
+    focus.clearPostFocusContent();
+  }
+
+  function handleSkipSave() {
+    focus.clearPostFocusContent();
+  }
 </script>
 
 <div class="draft-comparison">
@@ -191,6 +215,26 @@
     </div>
   {/if}
 </div>
+
+{#if focus.postFocusContent && styles.styles.length > 0}
+  <div class="save-banner">
+    <p class="save-banner-text">
+      Want to save this piece to your writing profile? It'll help Inkwell match your voice better next time.
+    </p>
+    <div class="save-banner-actions">
+      <span class="save-label">Save to</span>
+      <select class="save-select" bind:value={saveStyleId}>
+        {#each styles.styles as s (s.id)}
+          <option value={s.id}>{s.name}</option>
+        {/each}
+      </select>
+      <button class="save-btn" onclick={handleSaveToProfile} disabled={saving}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      <button class="skip-btn" onclick={handleSkipSave}>Skip</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .draft-comparison {
@@ -423,5 +467,100 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* Save-to-profile banner */
+  .save-banner {
+    position: fixed;
+    bottom: 0;
+    left: 240px; /* sidebar width */
+    right: 0;
+    background: var(--chrome-surface);
+    border-top: 1px solid rgba(232, 115, 58, 0.3);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 50;
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .save-banner-text {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text);
+    margin: 0;
+    flex: 1;
+  }
+
+  .save-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .save-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: var(--chrome-text-muted);
+  }
+
+  .save-select {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--chrome-border);
+    border-radius: 20px;
+    padding: 4px 24px 4px 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: var(--chrome-text);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+
+  .save-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .save-btn {
+    padding: 5px 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .skip-btn {
+    background: none;
+    border: none;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: var(--chrome-text-muted);
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s;
+  }
+
+  .skip-btn:hover {
+    color: var(--chrome-text);
   }
 </style>

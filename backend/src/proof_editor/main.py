@@ -16,6 +16,7 @@ from starlette.requests import Request
 
 from proof_editor.agent.orchestrator import Orchestrator
 from proof_editor.api.auth import router as auth_router
+from proof_editor.api.preferences import router as preferences_router
 from proof_editor.api.sessions import router as sessions_router
 from proof_editor.api.styles import router as styles_router
 from proof_editor.api.voice import router as voice_router
@@ -98,6 +99,7 @@ async def csrf_middleware(request: Request, call_next):  # type: ignore[no-untyp
 
 
 app.include_router(auth_router)
+app.include_router(preferences_router)
 app.include_router(sessions_router)
 app.include_router(styles_router)
 app.include_router(voice_router)

@@ -82,6 +82,49 @@ def load_voice_profile(user_id: int, style_id: int) -> dict | None:
             return None
 
 
+def save_preference(user_id: int, key: str, value: str) -> None:
+    """Upsert a generic key-value preference for a user."""
+    from datetime import UTC, datetime
+
+    from sqlmodel import select
+
+    from proof_editor.db import db_session
+    from proof_editor.models.preference import Preference
+
+    with db_session() as db:
+        pref = db.exec(
+            select(Preference)
+            .where(Preference.user_id == user_id)
+            .where(Preference.key == key)
+        ).first()
+
+        if pref:
+            pref.value = value
+            pref.updated_at = datetime.now(UTC)
+        else:
+            pref = Preference(user_id=user_id, key=key, value=value)
+            db.add(pref)
+
+        db.commit()
+
+
+def load_preference(user_id: int, key: str) -> str | None:
+    """Load a generic preference value for a user. Returns None if not set."""
+    from sqlmodel import select
+
+    from proof_editor.db import db_session
+    from proof_editor.models.preference import Preference
+
+    with db_session() as db:
+        pref = db.exec(
+            select(Preference)
+            .where(Preference.user_id == user_id)
+            .where(Preference.key == key)
+        ).first()
+
+        return pref.value if pref else None
+
+
 def save_voice_profile(user_id: int, style_id: int, profile: dict) -> None:
     """Upsert a voice profile dict into the Preference table."""
     from datetime import UTC, datetime

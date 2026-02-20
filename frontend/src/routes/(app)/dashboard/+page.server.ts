@@ -12,14 +12,19 @@ interface SessionSummary {
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	const token = cookies.get('access_token');
-	const res = await fetch(`${INTERNAL_API_URL}/api/sessions`, {
-		headers: token ? { Cookie: `access_token=${token}` } : {}
-	});
+	const headers: Record<string, string> = token ? { Cookie: `access_token=${token}` } : {};
 
-	if (!res.ok) {
-		return { sessions: [] };
-	}
+	const [sessionsRes, prefsRes] = await Promise.all([
+		fetch(`${INTERNAL_API_URL}/api/sessions`, { headers }),
+		fetch(`${INTERNAL_API_URL}/api/preferences`, { headers })
+	]);
 
-	const sessions: SessionSummary[] = await res.json();
-	return { sessions };
+	const sessions: SessionSummary[] = sessionsRes.ok ? await sessionsRes.json() : [];
+	const prefs = prefsRes.ok ? await prefsRes.json() : {};
+
+	return {
+		sessions,
+		onboarding_completed: prefs.onboarding_completed ?? false,
+		last_style_id: prefs.last_style_id ?? null
+	};
 };

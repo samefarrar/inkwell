@@ -43,7 +43,7 @@ export type ServerMessage =
     };
 
 export type ClientMessage =
-  | { type: 'task.select'; task_type: string; topic: string }
+  | { type: 'task.select'; task_type: string; topic: string; style_id?: number | null }
   | { type: 'interview.answer'; answer: string }
   | {
       type: 'draft.highlight';

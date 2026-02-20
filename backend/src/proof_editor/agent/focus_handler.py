@@ -81,6 +81,7 @@ class FocusHandler:
         interview_summary: str,
         key_material: list[str],
         voice_profile_context: str = "",
+        style_tone: str | None = None,
     ) -> None:
         self.send = send
         self.session_id = session_id
@@ -88,6 +89,7 @@ class FocusHandler:
         self.interview_summary = interview_summary
         self.key_material = key_material
         self.voice_profile_context = voice_profile_context
+        self.style_tone = style_tone
         self.draft_index: int = -1
         self.draft_content: str = ""
         self._focus_agent: Any = None
@@ -210,7 +212,7 @@ class FocusHandler:
         """Run the deterministic style engine and send suggestions."""
         from proof_editor.style.engine import analyze
 
-        violations = analyze(text)
+        violations = analyze(text, tone=self.style_tone)
         for v in violations:
             if self._cancelled:
                 return

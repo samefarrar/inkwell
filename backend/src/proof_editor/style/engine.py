@@ -110,19 +110,37 @@ def _check_oxford_comma(text: str) -> list[StyleViolation]:
 
 
 @functools.lru_cache(maxsize=256)
-def _analyze_cached(text: str) -> tuple[StyleViolation, ...]:
+def _analyze_cached(
+    text: str, suppressed: frozenset[str] = frozenset()
+) -> tuple[StyleViolation, ...]:
     violations: list[StyleViolation] = []
-    violations.extend(_check_filler_words(text))
-    violations.extend(_check_passive_voice(text))
-    violations.extend(_check_oxford_comma(text))
+    if "filler_words" not in suppressed:
+        violations.extend(_check_filler_words(text))
+    if "passive_voice" not in suppressed:
+        violations.extend(_check_passive_voice(text))
+    if "oxford_comma" not in suppressed:
+        violations.extend(_check_oxford_comma(text))
     violations.sort(key=lambda v: v.start)
     return tuple(violations)
 
 
-def analyze(text: str) -> list[StyleViolation]:
+# Tones that suppress passive-voice warnings (passive is often correct in these genres)
+_PASSIVE_SUPPRESSED_TONES = {"Academic", "Technical"}
+
+
+def suppressed_rules_for_tone(tone: str | None) -> frozenset[str]:
+    """Return the set of rule IDs to suppress for a given style tone."""
+    if tone in _PASSIVE_SUPPRESSED_TONES:
+        return frozenset({"passive_voice"})
+    return frozenset()
+
+
+def analyze(text: str, tone: str | None = None) -> list[StyleViolation]:
     """Run all style rules on the given text.
 
     Returns a list of violations with character offsets.
+    Passive voice is suppressed for Academic and Technical tones.
     Uses LRU cache to skip redundant analysis on identical text.
     """
-    return list(_analyze_cached(text))
+    suppressed = suppressed_rules_for_tone(tone)
+    return list(_analyze_cached(text, suppressed))

@@ -124,6 +124,12 @@ class Orchestrator:
             db.refresh(session)
             self.session_id = session.id
 
+        # Persist last-used style for pre-selection on next session
+        if self.style_id is not None:
+            from proof_editor.learning import save_preference
+
+            save_preference(self.user_id, "user:last_style_id", str(self.style_id))
+
         self.state = "interview"
         self._interview_msg_counter = 0
         search_provider = create_search_provider()
@@ -595,8 +601,9 @@ class Orchestrator:
                     sess.selected_draft_index = msg.draft_index
                     db.commit()
 
-        # Build voice profile context for editorial comments
+        # Build voice profile context; load style tone for rule suppression
         voice_profile_context = ""
+        style_tone: str | None = None
         if self.style_id:
             from proof_editor.learning import (
                 format_voice_profile_for_prompt,
@@ -606,6 +613,12 @@ class Orchestrator:
                 format_rule_stats_for_prompt,
                 load_rule_stats,
             )
+            from proof_editor.models.style import WritingStyle
+
+            with db_session() as db:
+                ws = db.get(WritingStyle, self.style_id)
+                if ws:
+                    style_tone = ws.tone
 
             profile = load_voice_profile(self.user_id, self.style_id)
             if profile:
@@ -628,6 +641,7 @@ class Orchestrator:
             interview_summary=self.interview_summary,
             key_material=self.key_material,
             voice_profile_context=voice_profile_context,
+            style_tone=style_tone,
         )
         await self._focus_handler.handle_enter(msg)
 
