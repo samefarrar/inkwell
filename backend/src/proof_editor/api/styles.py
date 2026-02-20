@@ -46,11 +46,17 @@ def _extract_pdf_text(data: bytes) -> str:
 class StyleCreate(BaseModel):
     name: str = Field(max_length=200)
     description: str = Field(default="", max_length=2000)
+    tone: str | None = Field(default=None, max_length=50)
+    audience: str | None = Field(default=None, max_length=200)
+    domain: str | None = Field(default=None, max_length=200)
 
 
 class StyleUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
+    tone: str | None = Field(default=None, max_length=50)
+    audience: str | None = Field(default=None, max_length=200)
+    domain: str | None = Field(default=None, max_length=200)
 
 
 class SampleCreate(BaseModel):
@@ -72,6 +78,9 @@ def list_styles(user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
                 "id": s.id,
                 "name": s.name,
                 "description": s.description,
+                "tone": s.tone,
+                "audience": s.audience,
+                "domain": s.domain,
                 "created_at": s.created_at.isoformat(),
                 "updated_at": s.updated_at.isoformat(),
             }
@@ -86,7 +95,12 @@ def create_style(
     """Create a new writing style."""
     with db_session() as db:
         style = WritingStyle(
-            name=body.name, description=body.description, user_id=user.id
+            name=body.name,
+            description=body.description,
+            tone=body.tone,
+            audience=body.audience,
+            domain=body.domain,
+            user_id=user.id,
         )
         db.add(style)
         db.commit()
@@ -95,6 +109,9 @@ def create_style(
             "id": style.id,
             "name": style.name,
             "description": style.description,
+            "tone": style.tone,
+            "audience": style.audience,
+            "domain": style.domain,
         }
 
 
@@ -122,6 +139,9 @@ def get_style(style_id: int, user: User = Depends(get_current_user)) -> dict[str
             "id": style.id,
             "name": style.name,
             "description": style.description,
+            "tone": style.tone,
+            "audience": style.audience,
+            "domain": style.domain,
             "samples": [
                 {
                     "id": s.id,
@@ -148,10 +168,23 @@ def update_style(
             style.name = body.name
         if body.description is not None:
             style.description = body.description
+        if body.tone is not None:
+            style.tone = body.tone
+        if body.audience is not None:
+            style.audience = body.audience
+        if body.domain is not None:
+            style.domain = body.domain
         style.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(style)
-        return {"id": style.id, "name": style.name, "description": style.description}
+        return {
+            "id": style.id,
+            "name": style.name,
+            "description": style.description,
+            "tone": style.tone,
+            "audience": style.audience,
+            "domain": style.domain,
+        }
 
 
 @router.delete("/{style_id}")

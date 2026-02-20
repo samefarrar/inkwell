@@ -9,9 +9,15 @@
 	import DraftComparison from '$lib/components/DraftComparison.svelte';
 	import FocusEditor from '$lib/components/FocusEditor.svelte';
 	import OutlineScreen from '$lib/components/OutlineScreen.svelte';
+	import OnboardingPrompt from '$lib/components/OnboardingPrompt.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	let onboardingDismissed = $state(false);
+	const showOnboarding = $derived(
+		!data.onboarding_completed && !onboardingDismissed && data.sessions.length === 0
+	);
 
 	let cleanup: (() => void) | undefined;
 
@@ -55,7 +61,11 @@
 {#key session.screen}
 	<div class="screen">
 		{#if session.screen === 'task'}
-			<TaskSelector onResume={(id) => goto('/session/' + id)} />
+			{#if showOnboarding}
+				<OnboardingPrompt onDismiss={() => (onboardingDismissed = true)} />
+			{/if}
+
+			<TaskSelector onResume={(id) => goto('/session/' + id)} lastStyleId={data.last_style_id} />
 
 			{#if data.sessions.length > 0}
 				<div class="recent-sessions">

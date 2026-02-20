@@ -20,6 +20,11 @@ class WritingStyle(SQLModel, table=True):
     )
     name: str = Field(index=True, max_length=200)
     description: str = Field(default="", max_length=2000)
+    tone: str | None = Field(
+        default=None, max_length=50
+    )  # "Formal"|"Conversational"|"Academic"|"Technical"|"Creative"
+    audience: str | None = Field(default=None, max_length=200)  # e.g. "ML researchers"
+    domain: str | None = Field(default=None, max_length=200)  # e.g. "machine learning"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

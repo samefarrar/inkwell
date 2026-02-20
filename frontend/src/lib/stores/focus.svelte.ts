@@ -51,6 +51,8 @@ class FocusStore {
 	editorInstance = $state<any>(null);
 	// Comment IDs waiting for an LLM-driven approve edit to come back
 	pendingApproveIds = $state<string[]>([]);
+	// Set when user exits focus — content of the finished piece for save-to-profile prompt
+	postFocusContent = $state<string | null>(null);
 	private pendingQueue: QueuedMessage[] = [];
 
 	get suggestionCount(): number {
@@ -81,7 +83,9 @@ class FocusStore {
 		this.pendingQueue = [];
 	}
 
-	leaveFocus(): void {
+	leaveFocus(saveContent?: string): void {
+		// Capture content for save-to-profile prompt before clearing state
+		this.postFocusContent = saveContent ?? (this.content || null);
 		this.selectedDraftIndex = -1;
 		this.content = '';
 		this.suggestions = [];
@@ -95,6 +99,10 @@ class FocusStore {
 		this.pendingApproveIds = [];
 		this.pendingQueue = [];
 		this.activeChatMessage = null;
+	}
+
+	clearPostFocusContent(): void {
+		this.postFocusContent = null;
 	}
 
 	setEditorInstance(editor: unknown): void {
