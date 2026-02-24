@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { ws } from '$lib/ws.svelte';
   import { session } from '$lib/stores/session.svelte';
+  import { styles } from '$lib/stores/styles.svelte';
   import VoiceButton from '$lib/components/VoiceButton.svelte';
 
-  let { onResume: _ }: {
+  let { onResume: _, lastStyleId = null }: {
     onResume: (sessionId: number) => void;
+    lastStyleId?: number | null;
   } = $props();
 
   const taskTypes = [
@@ -18,10 +21,29 @@
   let selectedType = $state('essay');
   let topic = $state('');
 
+  // Pre-select last used style, falling back to first available
+  let selectedStyleId = $state<number | null>(null);
+
+  // Initialize once styles are available, respecting lastStyleId preference
+  $effect(() => {
+    if (selectedStyleId === null && styles.styles.length > 0) {
+      selectedStyleId = lastStyleId ?? styles.styles[0].id;
+    }
+  });
+
+  const selectedStyleName = $derived(
+    styles.styles.find((s) => s.id === selectedStyleId)?.name ?? null
+  );
+
   function startWriting() {
     if (!topic.trim()) return;
     session.startInterview(selectedType, topic.trim());
-    ws.send({ type: 'task.select', task_type: selectedType, topic: topic.trim() });
+    ws.send({
+      type: 'task.select',
+      task_type: selectedType,
+      topic: topic.trim(),
+      style_id: selectedStyleId
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -57,6 +79,27 @@
           {t.label}
         </button>
       {/each}
+    </div>
+
+    <!-- Style picker -->
+    <div class="style-row">
+      {#if styles.styles.length === 0}
+        <button class="style-cta" onclick={() => goto('/styles')}>
+          Add your voice →
+        </button>
+      {:else}
+        <span class="style-label">Writing as</span>
+        <div class="style-select-wrap">
+          <select
+            class="style-select"
+            bind:value={selectedStyleId}
+          >
+            {#each styles.styles as s (s.id)}
+              <option value={s.id}>{s.name}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
     </div>
 
     <div class="toolbar">
@@ -179,6 +222,65 @@
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+  }
+
+  /* Style picker row */
+  .style-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 10px;
+  }
+
+  .style-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: var(--ink-muted);
+    flex-shrink: 0;
+  }
+
+  .style-select-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .style-select {
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--paper-border);
+    border-radius: 20px;
+    padding: 3px 24px 3px 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+
+  .style-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .style-cta {
+    background: none;
+    border: none;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 0.15s;
+  }
+
+  .style-cta:hover {
+    opacity: 0.8;
   }
 
   /* Toolbar */

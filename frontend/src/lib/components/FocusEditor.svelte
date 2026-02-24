@@ -10,7 +10,9 @@
 
 	function handleBack() {
 		ws.send({ type: 'focus.exit' });
-		focus.leaveFocus();
+		// Capture plain text from TipTap before dismounting for save-to-profile prompt
+		const plainText = focus.editorInstance?.getText?.() ?? '';
+		focus.leaveFocus(plainText || undefined);
 		session.goToDrafts();
 	}
 

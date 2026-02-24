@@ -9,6 +9,9 @@ export interface WritingStyle {
   id: number;
   name: string;
   description: string;
+  tone: string | null;
+  audience: string | null;
+  domain: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,11 +29,21 @@ export interface StyleDetail extends WritingStyle {
   samples: StyleSample[];
 }
 
+export interface VoiceProfile {
+  voice_descriptors: string[];
+  structural_signature: string;
+  red_flags: string[];
+  strengths: string[];
+}
+
 class StylesStore {
   styles = $state<WritingStyle[]>([]);
   loading = $state(false);
   currentStyle = $state<StyleDetail | null>(null);
   currentStyleLoading = $state(false);
+  voiceProfile = $state<VoiceProfile | null>(null);
+  voiceProfileLoading = $state(false);
+  analyzing = $state(false);
 
   async loadStyles(): Promise<void> {
     this.loading = true;
@@ -64,6 +77,8 @@ class StylesStore {
     try {
       const res = await fetch(`${BASE_API_URL}/api/styles/${id}`);
       this.currentStyle = await res.json();
+      // Load voice profile in parallel (non-blocking)
+      this.loadVoiceProfile(id);
     } catch {
       // Silently fail
     } finally {
@@ -71,10 +86,22 @@ class StylesStore {
     }
   }
 
-  async updateStyle(id: number, name?: string, description?: string): Promise<void> {
-    const body: Record<string, string> = {};
-    if (name !== undefined) body.name = name;
-    if (description !== undefined) body.description = description;
+  async updateStyle(
+    id: number,
+    updates: {
+      name?: string;
+      description?: string;
+      tone?: string | null;
+      audience?: string | null;
+      domain?: string | null;
+    }
+  ): Promise<void> {
+    const body: Record<string, string | null> = {};
+    if (updates.name !== undefined) body.name = updates.name;
+    if (updates.description !== undefined) body.description = updates.description;
+    if (updates.tone !== undefined) body.tone = updates.tone;
+    if (updates.audience !== undefined) body.audience = updates.audience;
+    if (updates.domain !== undefined) body.domain = updates.domain;
     try {
       const res = await fetch(`${BASE_API_URL}/api/styles/${id}`, {
         method: 'PUT',
@@ -88,6 +115,38 @@ class StylesStore {
       }
     } catch {
       // Silently fail
+    }
+  }
+
+  async loadVoiceProfile(styleId: number): Promise<void> {
+    this.voiceProfileLoading = true;
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/styles/${styleId}/voice_profile`);
+      if (res.ok) {
+        this.voiceProfile = await res.json();
+      } else {
+        this.voiceProfile = null;
+      }
+    } catch {
+      this.voiceProfile = null;
+    } finally {
+      this.voiceProfileLoading = false;
+    }
+  }
+
+  async analyzeStyle(styleId: number): Promise<void> {
+    this.analyzing = true;
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/styles/${styleId}/analyze`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        this.voiceProfile = await res.json();
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      this.analyzing = false;
     }
   }
 
@@ -152,6 +211,7 @@ class StylesStore {
 
   clearCurrent(): void {
     this.currentStyle = null;
+    this.voiceProfile = null;
   }
 }
 

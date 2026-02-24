@@ -2,10 +2,17 @@
   import { goto } from '$app/navigation';
   import { styles } from '$lib/stores/styles.svelte';
 
+  const TONE_OPTIONS = ['Formal', 'Conversational', 'Academic', 'Technical', 'Creative'];
+
   let editingName = $state(false);
   let editingDesc = $state(false);
   let nameInput = $state('');
   let descInput = $state('');
+
+  let audienceInput = $state('');
+  let editingAudience = $state(false);
+  let domainInput = $state('');
+  let editingDomain = $state(false);
 
   let showPaste = $state(false);
   let pasteTitle = $state('');
@@ -27,7 +34,7 @@
 
   async function saveName() {
     if (!styles.currentStyle || !nameInput.trim()) return;
-    await styles.updateStyle(styles.currentStyle.id, nameInput.trim());
+    await styles.updateStyle(styles.currentStyle.id, { name: nameInput.trim() });
     editingName = false;
   }
 
@@ -38,8 +45,45 @@
 
   async function saveDesc() {
     if (!styles.currentStyle) return;
-    await styles.updateStyle(styles.currentStyle.id, undefined, descInput.trim());
+    await styles.updateStyle(styles.currentStyle.id, { description: descInput.trim() });
     editingDesc = false;
+  }
+
+  async function setTone(tone: string) {
+    if (!styles.currentStyle) return;
+    const newTone = styles.currentStyle.tone === tone ? null : tone;
+    await styles.updateStyle(styles.currentStyle.id, { tone: newTone });
+  }
+
+  function startEditAudience() {
+    audienceInput = styles.currentStyle?.audience ?? '';
+    editingAudience = true;
+  }
+
+  async function saveAudience() {
+    if (!styles.currentStyle) return;
+    await styles.updateStyle(styles.currentStyle.id, {
+      audience: audienceInput.trim() || null
+    });
+    editingAudience = false;
+  }
+
+  function startEditDomain() {
+    domainInput = styles.currentStyle?.domain ?? '';
+    editingDomain = true;
+  }
+
+  async function saveDomain() {
+    if (!styles.currentStyle) return;
+    await styles.updateStyle(styles.currentStyle.id, {
+      domain: domainInput.trim() || null
+    });
+    editingDomain = false;
+  }
+
+  async function handleAnalyze() {
+    if (!styles.currentStyle) return;
+    await styles.analyzeStyle(styles.currentStyle.id);
   }
 
   async function handlePaste() {
@@ -95,6 +139,12 @@
     await styles.uploadSample(styles.currentStyle.id, file);
   }
 
+  // Check if samples were added since last analysis (profile stale)
+  const profileStale = $derived(
+    styles.voiceProfile !== null &&
+    styles.currentStyle !== null &&
+    styles.currentStyle.samples.length > 0
+  );
 </script>
 
 <div class="style-editor">
@@ -146,6 +196,137 @@
         <p class="style-description" ondblclick={startEditDesc}>
           {styles.currentStyle.description || 'No description — double-click to add one.'}
         </p>
+      {/if}
+    </div>
+
+    <!-- Metadata section -->
+    <div class="metadata-section">
+      <div class="meta-row">
+        <span class="meta-label">Tone</span>
+        <div class="tone-pills">
+          {#each TONE_OPTIONS as tone}
+            <button
+              class="tone-pill"
+              class:active={styles.currentStyle.tone === tone}
+              onclick={() => setTone(tone)}
+            >
+              {tone}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">Audience</span>
+        {#if editingAudience}
+          <div class="inline-edit meta-inline-edit">
+            <input
+              type="text"
+              bind:value={audienceInput}
+              placeholder="e.g. ML researchers, general public"
+              maxlength="200"
+              onkeydown={(e) => e.key === 'Enter' && saveAudience()}
+            />
+            <button class="inline-save" onclick={saveAudience}>Save</button>
+            <button class="inline-cancel" onclick={() => (editingAudience = false)}>Cancel</button>
+          </div>
+        {:else}
+          <button class="meta-value" onclick={startEditAudience}>
+            {styles.currentStyle.audience || 'Add audience'}
+          </button>
+        {/if}
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">Domain</span>
+        {#if editingDomain}
+          <div class="inline-edit meta-inline-edit">
+            <input
+              type="text"
+              bind:value={domainInput}
+              placeholder="e.g. machine learning, personal finance"
+              maxlength="200"
+              onkeydown={(e) => e.key === 'Enter' && saveDomain()}
+            />
+            <button class="inline-save" onclick={saveDomain}>Save</button>
+            <button class="inline-cancel" onclick={() => (editingDomain = false)}>Cancel</button>
+          </div>
+        {:else}
+          <button class="meta-value" onclick={startEditDomain}>
+            {styles.currentStyle.domain || 'Add domain'}
+          </button>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Voice Profile section -->
+    <div class="voice-section">
+      <div class="voice-header">
+        <h3>Voice Profile</h3>
+        {#if styles.currentStyle.samples.length > 0}
+          <button
+            class="analyze-btn"
+            onclick={handleAnalyze}
+            disabled={styles.analyzing}
+          >
+            {#if styles.analyzing}
+              Reading your samples…
+            {:else if styles.voiceProfile}
+              Re-analyze
+            {:else}
+              Analyze my voice
+            {/if}
+          </button>
+        {/if}
+      </div>
+
+      {#if styles.voiceProfileLoading}
+        <div class="profile-loading">
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      {:else if styles.analyzing}
+        <div class="analyzing-state">
+          <div class="analyzing-spinner"></div>
+          <span>Reading your samples and extracting your voice…</span>
+        </div>
+      {:else if styles.voiceProfile}
+        <div class="voice-profile">
+          {#if styles.voiceProfile.voice_descriptors?.length}
+            <div class="profile-row">
+              <span class="profile-key">Voice</span>
+              <span class="profile-value">{styles.voiceProfile.voice_descriptors.join(' · ')}</span>
+            </div>
+          {/if}
+          {#if styles.voiceProfile.structural_signature}
+            <div class="profile-row">
+              <span class="profile-key">Structure</span>
+              <span class="profile-value">{styles.voiceProfile.structural_signature}</span>
+            </div>
+          {/if}
+          {#if styles.voiceProfile.strengths?.length}
+            <div class="profile-row">
+              <span class="profile-key">Strengths</span>
+              <span class="profile-value">{styles.voiceProfile.strengths.join(' · ')}</span>
+            </div>
+          {/if}
+          {#if styles.voiceProfile.red_flags?.length}
+            <div class="profile-row">
+              <span class="profile-key">Avoid</span>
+              <span class="profile-value profile-avoid">{styles.voiceProfile.red_flags.join(' · ')}</span>
+            </div>
+          {/if}
+        </div>
+      {:else if styles.currentStyle.samples.length === 0}
+        <div class="profile-empty">
+          Add at least one writing sample, then analyze to extract your voice profile.
+        </div>
+      {:else}
+        <div class="profile-empty">
+          Click "Analyze my voice" to extract your writing profile from your samples.
+        </div>
       {/if}
     </div>
 
@@ -286,7 +467,7 @@
   }
 
   .style-header {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
   }
 
   .style-title {
@@ -365,16 +546,97 @@
     color: var(--accent);
   }
 
-  .samples-section {
-    border-top: 1px solid var(--chrome-border);
-    padding-top: 24px;
+  /* Metadata section */
+  .metadata-section {
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .samples-header {
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .meta-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--chrome-text-muted);
+    width: 64px;
+    flex-shrink: 0;
+  }
+
+  .tone-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .tone-pill {
+    padding: 3px 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    border-radius: 20px;
+    border: 1px solid var(--chrome-border);
+    background: transparent;
+    color: var(--chrome-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tone-pill:hover {
+    border-color: var(--accent);
+    color: var(--chrome-text);
+  }
+
+  .tone-pill.active {
+    background: rgba(232, 115, 58, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .meta-value {
+    background: none;
+    border: none;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    transition: color 0.15s;
+  }
+
+  .meta-value:hover {
+    color: var(--chrome-text);
+  }
+
+  .meta-inline-edit {
+    flex: 1;
+  }
+
+  /* Voice profile section */
+  .voice-section {
+    border: 1px solid var(--chrome-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+
+  .voice-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
 
   h3 {
@@ -385,6 +647,122 @@
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  .analyze-btn {
+    padding: 5px 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .analyze-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .voice-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .profile-row {
+    display: flex;
+    gap: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .profile-key {
+    font-weight: 600;
+    color: var(--chrome-text-muted);
+    width: 72px;
+    flex-shrink: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-top: 2px;
+  }
+
+  .profile-value {
+    color: var(--chrome-text);
+    flex: 1;
+  }
+
+  .profile-avoid {
+    color: #f87171;
+  }
+
+  .profile-empty {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
+    font-style: italic;
+  }
+
+  .profile-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .skeleton-line {
+    height: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-line.short {
+    width: 55%;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  .analyzing-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--chrome-text-muted);
+  }
+
+  .analyzing-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(232, 115, 58, 0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Samples section */
+  .samples-section {
+    border-top: 1px solid var(--chrome-border);
+    padding-top: 24px;
+  }
+
+  .samples-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
   }
 
   .sample-actions {
@@ -443,6 +821,7 @@
     font-size: 14px;
     color: var(--chrome-text);
     resize: none;
+    box-sizing: border-box;
   }
 
   .paste-form input::placeholder,
